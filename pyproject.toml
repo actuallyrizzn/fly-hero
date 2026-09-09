@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flyhero"
+version = "0.1.0"
+description = "A frozen fly-connectome reservoir that plays Clone Hero by seeing the highway."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Otto Vernal", email = "otto.vernal@decisionsciencecorp.com" }]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+
+[project.urls]
+Repository = "https://github.com/actuallyrizzn/fly-hero"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "--cov=flyhero",
+    "--cov-report=term-missing",
+    "--cov-fail-under=90",
+]
+pythonpath = ["src"]
+
+[tool.coverage.run]
+branch = true
+source = ["flyhero"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
