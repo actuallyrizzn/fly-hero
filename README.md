@@ -15,7 +15,17 @@ Tasks: [Fly Hero board](https://tasks.decisionsciencecorp.com/admin/projects.php
 - **Controls:** fly graph vs scrambled vs features-only.
 - **Slice gate:** ≥90% unit + integration + that slice’s visual end-to-end routes, then commit and push.
 
-## Phase 0 (this commit)
+## Phase 1 — POC eye
+
+`ChartEye` turns a `notes.chart` into the same lane×depth picture a player sees. Near is the strike line. The player does not get hit clocks. `NearBinReadout` is the features-only ceiling (copy the near bin). A later fly readout has to match or beat that.
+
+```bash
+pytest
+```
+
+Visual golden: `tests/test_chart_eye.py` renders the mid-tempo fixture as ASCII (`G|..#.|` …).
+
+## Phase 0 — harness
 
 Interfaces and a player loop with test doubles. Clone Hero install and `/dev/uinput` are *probed*, not required, so CI can stay green before the game is on disk.
 
