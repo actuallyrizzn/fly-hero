@@ -23,7 +23,11 @@ Tasks: [Fly Hero board](https://tasks.decisionsciencecorp.com/admin/projects.php
 pytest tests/test_play.py
 ```
 
-Family charts install on the laptop only: `~/.clonehero/Songs/Thingerthing`. First song: *Thinger's Warmup* (Easy/Medium if the chart has it).
+Family charts live on the laptop only: `~/.clonehero/Songs/Thingerthing`. First song: **Kazotsky Kick vGH**, Easy (36s, already on disk). Bind Clone Hero to **1–5** and **Down**, then:
+
+```bash
+python tools/play_live.py --track EasySingle ~/.clonehero/Songs/Thingerthing/Covers\ &\ vGH\'s/Kazotsky\ Kick\ vGH/notes.chart
+```
 
 ## Phase 2 — fair eye (pixels)
 
