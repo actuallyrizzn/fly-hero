@@ -48,6 +48,13 @@ def test_paint_receptors_is_highway():
     assert classify(paint_receptors(), templates=templates()) == "highway"
 
 
+def test_bright_song_list_is_not_highway():
+    songs = Image.open(SCREENS / "songs.png")
+    assert classify(songs, templates=templates()) == "songs"
+    live = Image.open(SCREENS / "live_highway.png")
+    assert classify(live, templates=templates()) == "highway"
+
+
 def test_black_fade_is_loading_not_error():
     assert classify(Image.new("RGB", (200, 160), (4, 4, 4))) == "loading"
 
@@ -106,9 +113,11 @@ def test_keys_for_menu_path():
     assert keys_for("difficulty", state) == ["down", "down", "down", "a"]
     assert keys_for("modifiers", state) == ["a"]
     assert keys_for("ready", state) == ["a"]
-    assert keys_for("title", state) == ["enter"]
+    assert keys_for("title", state) == []
     assert keys_for("title", LoaderState(title_tries=4)) == []
-    assert keys_for("profile", LoaderState(passed={"profile"})) == ["s"]
+    assert keys_for("title", LoaderState()) == ["enter"]
+    assert keys_for("profile", LoaderState(passed={"profile"})) == []
+    assert keys_for("profile", LoaderState(passed={"main"})) == ["s"]
     assert keys_for("main", LoaderState(passed={"main"})) == []
     assert keys_for("unknown", LoaderState()) == []
     with pytest.raises(UnknownScreen, match="not recognized"):

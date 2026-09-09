@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from PIL import Image
 
-# ImageGrab of an Xwayland Unity window is ~0. A real desktop is much brighter.
-MIN_MEAN_LUMA = 6.0
-MIN_MAX_LUMA = 32.0
+# ImageGrab of an Xwayland Unity window is ~0. A live highway is also dark
+# (mean ~7) but gems still light a few pixels. Dead grabs are max≈0.
+MIN_MEAN_LUMA = 1.0
+MIN_MAX_LUMA = 16.0
 
 
 def mean_luma(image: Image.Image) -> float:

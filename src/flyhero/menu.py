@@ -9,6 +9,7 @@ import subprocess
 KEY_ESC = 1
 KEY_ENTER = 28
 KEY_DOWN = 108
+KEY_UP = 103
 KEY_SPACE = 57
 LETTER_CODES = {
     "a": 30,
@@ -42,6 +43,7 @@ NAMED_CODES = {
     "esc": KEY_ESC,
     "enter": KEY_ENTER,
     "down": KEY_DOWN,
+    "up": KEY_UP,
     "space": KEY_SPACE,
     **LETTER_CODES,
 }

@@ -124,9 +124,11 @@ def classify(
     max_mse: float = 2500.0,
 ) -> str:
     """Name the screen. Fail closed to ``unknown`` rather than guess a key."""
-    if is_highway(image):
-        return "highway"
     luma = _mean_luma(image)
+    # Real highway is almost black. The song list has fret-colored chrome
+    # and used to trip is_highway, which then blocked search.
+    if luma < 28 and is_highway(image):
+        return "highway"
     mid = _box_luma(image, (50, 35, 110, 65))
     if luma < 22:
         return "error_cli" if mid > 30 else "loading"
@@ -194,14 +196,18 @@ def keys_for(
     if screen == "error_cli":
         return ["a"]
     if screen == "title":
+        if "profile" in state.passed or "main" in state.passed:
+            return []
         state.passed.add("title")
         if state.title_tries >= 4:
             return []
         state.title_tries += 1
         return ["enter"]
     if screen == "profile":
-        if "profile" in state.passed or "main" in state.passed:
+        if "main" in state.passed:
             return ["s"]
+        if "profile" in state.passed:
+            return []
         state.passed.add("profile")
         return ["a"]
     if screen == "update":
