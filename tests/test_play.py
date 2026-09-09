@@ -11,7 +11,7 @@ from flyhero.pixel_eye import PixelEye
 from flyhero.play import record_chart
 from flyhero.train import NearBinReadout
 from flyhero.types import Action
-from flyhero.uinput_hands import DeviceHands, RecordingHands, open_uinput
+from flyhero.uinput_hands import DeviceHands, RecordingHands, TeeHands, open_uinput
 
 FIXTURE = Path(__file__).parent / "fixtures" / "midtempo.chart"
 
@@ -156,6 +156,16 @@ def test_open_uinput_missing_evdev(monkeypatch):
     monkeypatch.setattr(builtins, "__import__", blocked)
     with pytest.raises(RuntimeError, match="evdev"):
         open_uinput()
+
+
+def test_tee_hands_records_and_writes():
+    fake = FakeDevice()
+    mapping = GuitarMap()
+    tee = TeeHands(DeviceHands(fake, mapping), RecordingHands(mapping))
+    tee.set_time(0.5)
+    tee.apply(Action.from_frets((True, False, False, False, False), True))
+    assert tee.log.events
+    assert fake.writes
 
 
 def test_device_without_syn_writes_syn_report():

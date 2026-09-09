@@ -66,6 +66,103 @@ class NearBinReadout:
         return Action.from_frets(frets, any(frets))
 
 
+class LinearReadout:
+    """Learned map from reservoir state to frets + strum. ``W`` stays frozen."""
+
+    def __init__(
+        self,
+        weights: tuple[tuple[float, ...], ...],
+        *,
+        threshold: float = 0.5,
+    ) -> None:
+        if len(weights) != LANE_COUNT + 1:
+            raise ValueError("need five fret rows plus one strum row")
+        width = len(weights[0])
+        if width < 2:
+            raise ValueError("each row needs state weights plus a bias")
+        if any(len(row) != width for row in weights):
+            raise ValueError("weight rows must share a length")
+        if not 0.0 <= threshold <= 1.0:
+            raise ValueError("threshold must be in [0, 1]")
+        self.weights = weights
+        self.threshold = threshold
+
+    def act(self, state: list[float] | tuple[float, ...]) -> Action:
+        width = len(self.weights[0]) - 1
+        values = [float(v) for v in state]
+        if len(values) < width:
+            values.extend(0.0 for _ in range(width - len(values)))
+        elif len(values) > width:
+            values = values[:width]
+        values.append(1.0)
+        outs = [sum(w * x for w, x in zip(row, values)) for row in self.weights]
+        frets = tuple(out >= self.threshold for out in outs[:LANE_COUNT])
+        return Action.from_frets(frets, outs[LANE_COUNT] >= self.threshold)
+
+
+def _transpose(matrix: list[list[float]]) -> list[list[float]]:
+    return [list(row) for row in zip(*matrix)]
+
+
+def _matvec(matrix: list[list[float]], vector: list[float]) -> list[float]:
+    return [sum(row[j] * vector[j] for j in range(len(vector))) for row in matrix]
+
+
+def _matmul(left: list[list[float]], right: list[list[float]]) -> list[list[float]]:
+    cols = _transpose(right)
+    return [[sum(a * b for a, b in zip(row, col)) for col in cols] for row in left]
+
+
+def _solve(matrix: list[list[float]], vector: list[float]) -> list[float]:
+    n = len(matrix)
+    aug = [row[:] + [vector[i]] for i, row in enumerate(matrix)]
+    for col in range(n):
+        pivot = max(range(col, n), key=lambda r: abs(aug[r][col]))
+        aug[col], aug[pivot] = aug[pivot], aug[col]
+        diag = aug[col][col]
+        if abs(diag) < 1e-12:
+            raise ValueError("singular teach matrix")
+        scale = 1.0 / diag
+        aug[col] = [v * scale for v in aug[col]]
+        for row in range(n):
+            if row == col:
+                continue
+            factor = aug[row][col]
+            aug[row] = [aug[row][c] - factor * aug[col][c] for c in range(n + 1)]
+    return [row[-1] for row in aug]
+
+
+def _ridge_solve(design: list[list[float]], target: list[float], ridge: float) -> list[float]:
+    xt = _transpose(design)
+    gram = _matmul(xt, design)
+    for i in range(len(gram)):
+        gram[i][i] += ridge
+    return _solve(gram, _matvec(xt, target))
+
+
+def fit_linear_readout(samples: list[Sample], *, ridge: float = 1e-3) -> LinearReadout:
+    """Least-squares readout on highway pictures. This is the teach step."""
+    if not samples:
+        raise ValueError("need samples to teach the readout")
+    if ridge <= 0:
+        raise ValueError("ridge must be positive")
+    design: list[list[float]] = []
+    targets: list[list[float]] = []
+    for sample in samples:
+        row = list(sample.frame.as_vector())
+        row.append(1.0)
+        design.append(row)
+        targets.append(
+            [1.0 if held else 0.0 for held in sample.action.frets]
+            + [1.0 if sample.action.strum else 0.0]
+        )
+    weights = []
+    for column in range(LANE_COUNT + 1):
+        y = [row[column] for row in targets]
+        weights.append(tuple(_ridge_solve(design, y, ridge)))
+    return LinearReadout(tuple(weights))
+
+
 def evaluate(
     chart: Chart,
     reservoir: Reservoir | None = None,

@@ -138,5 +138,20 @@ def parse_chart(text: str, track: str = "ExpertSingle") -> Chart:
     )
 
 
+GUITAR_TRACKS = ("EasySingle", "MediumSingle", "HardSingle", "ExpertSingle")
+
+
+def pick_track(text: str, requested: str = "auto") -> str:
+    """Choose a guitar difficulty section. ``auto`` picks the first that exists."""
+    if requested != "auto":
+        if f"[{requested}]" not in text:
+            raise ValueError(f"chart has no [{requested}]")
+        return requested
+    for name in GUITAR_TRACKS:
+        if f"[{name}]" in text:
+            return name
+    raise ValueError("chart has no guitar track")
+
+
 def load_chart(path: Path | str, track: str = "ExpertSingle") -> Chart:
     return parse_chart(Path(path).read_text(encoding="utf-8"), track=track)

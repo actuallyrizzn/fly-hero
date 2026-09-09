@@ -6,6 +6,8 @@ Dev box: **ngram** (Lenovo IdeaPad Slim 3, Ubuntu desktop). The laptop screen is
 
 Tasks: [Fly Hero board](https://tasks.decisionsciencecorp.com/admin/projects.php?id=62) · PRD [Doc #1292](https://tasks.decisionsciencecorp.com/admin/doc.php?id=1292)
 
+Harness process (teach → record → score → live load): [docs/HARNESS.md](docs/HARNESS.md)
+
 ## Locked
 
 - **Fair eye:** pixels of the live Clone Hero window.
@@ -17,12 +19,17 @@ Tasks: [Fly Hero board](https://tasks.decisionsciencecorp.com/admin/projects.php
 
 ## Phase 3 — play
 
+Otto builds the harness. The **fly readout** plays. Do not sit in Clone Hero menus teaching a human how to clear a song.
+
+`tools/load_song.py` prints the Clone Hero argv that opens a song folder (`--song` only). Clone Hero’s official `--player Guitar,Easy` path is the **chart-preview bot** — that is not the fly (PRD). The readout trains offline on highway pictures (`ChartEye` / pixels), then `play_live.py` writes uinput.
+
 `RecordingHands` turns a chart (or pixel frames) into a fret/strum key log. Live `DeviceHands` writes those edges to `/dev/uinput`. CI never opens the kernel device.
 
 Repo / CI map is **1–5** and **Down**. Live Clone Hero on ngram uses the **stock keyboard**: **A S J K L** and **Down** (`--map clone-hero`, the default). Do not mix the two.
 
 ```bash
-pytest tests/test_play.py
+python tools/run_session.py --offline tests/fixtures/midtempo.chart --track ExpertSingle
+pytest tests/test_play.py tests/test_score.py tests/test_session.py
 ```
 
 Family charts live on the laptop only: `~/.clonehero/Songs/Thingerthing`. First song: **Kazotsky Kick vGH**, Easy (36s, already on disk). Leave Clone Hero on stock keys, then:

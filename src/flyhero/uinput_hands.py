@@ -57,6 +57,21 @@ class DeviceHands:
         self.last = action
 
 
+class TeeHands:
+    """Record the log the scorer reads and write the live guitar."""
+
+    def __init__(self, device: DeviceHands, log: RecordingHands | None = None) -> None:
+        self.device = device
+        self.log = log or RecordingHands(device.mapping)
+
+    def set_time(self, t_seconds: float) -> None:
+        self.log.set_time(t_seconds)
+
+    def apply(self, action: Action) -> None:
+        self.log.apply(action)
+        self.device.apply(action)
+
+
 def open_uinput(mapping: GuitarMap | None = None, factory=None):
     """Open a virtual keyboard. `factory` is for tests; live uses evdev."""
     mapping = mapping or GuitarMap()

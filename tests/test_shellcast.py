@@ -35,6 +35,8 @@ def test_extract_frame_reads_png(tmp_path: Path):
 
 
 def test_extract_frame_rejects_empty(tmp_path: Path):
+    from flyhero.shellcast import resolve_cast_file
+
     missing = tmp_path / "no.webm"
     with pytest.raises(RuntimeError, match="empty"):
         extract_frame(missing)
@@ -42,6 +44,10 @@ def test_extract_frame_rejects_empty(tmp_path: Path):
     empty.write_bytes(b"tiny")
     with pytest.raises(RuntimeError, match="empty"):
         extract_frame(empty)
+    stem = tmp_path / "live"
+    sibling = tmp_path / "live.webm"
+    sibling.write_bytes(b"x" * 80)
+    assert resolve_cast_file(stem) == sibling
 
 
 def test_extract_frame_ffmpeg_failure(tmp_path: Path):
@@ -167,7 +173,8 @@ def test_start_screencast_injected_bus():
     sys.modules["dbus"] = fake
     try:
         used = start_screencast(Path("/tmp/cast.webm"), bus=Bus(), framerate=9)
-        assert used == Path("/tmp/cast.webm.used")
+        assert used == Path("/tmp/cast.used")
+        assert calls[-1][1] == "/tmp/cast"
         assert "stop" in calls
         assert calls[-1][0] == "start"
         assert stop_screencast(bus=Bus()) is True

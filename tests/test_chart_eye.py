@@ -8,11 +8,14 @@ from flyhero.chart import load_chart, parse_chart
 from flyhero.chart_eye import ChartEye
 from flyhero.highway import encode_highway, render_ascii
 from flyhero.train import (
+    LinearReadout,
     NearBinReadout,
     collect_samples,
     evaluate,
+    fit_linear_readout,
     label_from_frame,
     play_chart,
+    _solve,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "midtempo.chart"
@@ -200,3 +203,38 @@ def test_collect_and_play():
     actions = play_chart(chart, step=0.25, look_ahead=1.0, depth=4)
     assert len(actions) == len(samples)
     assert any(a.strum for a in actions)
+
+
+def test_fit_linear_readout_matches_labels():
+    chart = load_chart(FIXTURE)
+    samples = collect_samples(chart, step=0.25, look_ahead=1.0, depth=4)
+    readout = fit_linear_readout(samples)
+    for sample in samples:
+        assert readout.act(sample.frame.as_vector()) == sample.action
+    padded = readout.act((0.0,))
+    assert padded == readout.act((0.0,) * 20)
+    long = readout.act((0.0,) * 80)
+    assert long.strum is False
+    with pytest.raises(ValueError, match="samples"):
+        fit_linear_readout([])
+    with pytest.raises(ValueError, match="ridge"):
+        fit_linear_readout(samples, ridge=0)
+    with pytest.raises(ValueError, match="five fret"):
+        LinearReadout(((1.0, 0.0),))
+    with pytest.raises(ValueError, match="bias"):
+        LinearReadout(tuple((1.0,) for _ in range(6)))
+    with pytest.raises(ValueError, match="length"):
+        LinearReadout(
+            (
+                (1.0, 0.0),
+                (1.0, 0.0, 0.0),
+                (1.0, 0.0),
+                (1.0, 0.0),
+                (1.0, 0.0),
+                (1.0, 0.0),
+            )
+        )
+    with pytest.raises(ValueError, match="threshold"):
+        LinearReadout(tuple((0.0, 0.0) for _ in range(6)), threshold=2.0)
+    with pytest.raises(ValueError, match="singular"):
+        _solve([[0.0, 0.0], [0.0, 0.0]], [1.0, 1.0])

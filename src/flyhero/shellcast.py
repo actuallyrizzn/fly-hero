@@ -58,6 +58,8 @@ def start_screencast(
     import dbus
 
     dest = Path(dest)
+    if dest.suffix:
+        dest = dest.with_suffix("")
     dest.parent.mkdir(parents=True, exist_ok=True)
     stop_screencast(bus)
     iface = _iface(bus)
@@ -73,6 +75,22 @@ def start_screencast(
     return Path(str(used))
 
 
+def resolve_cast_file(path: Path) -> Path:
+    """GNOME may append .webm / .undefined to the template we passed."""
+    path = Path(path)
+    candidates = [
+        path,
+        Path(str(path) + ".webm"),
+        Path(str(path) + ".undefined"),
+        path.with_suffix(".webm"),
+        path.with_suffix(".png"),
+    ]
+    found = [p for p in candidates if p.is_file() and p.stat().st_size >= 64]
+    if not found:
+        raise RuntimeError("Screencast file is empty")
+    return max(found, key=lambda p: p.stat().st_mtime)
+
+
 def extract_frame(
     webm: Path,
     *,
@@ -82,9 +100,7 @@ def extract_frame(
 ) -> Image.Image:
     """Decode the last frame of a growing Screencast webm."""
     run = runner or subprocess.run
-    webm = Path(webm)
-    if not webm.is_file() or webm.stat().st_size < 64:
-        raise RuntimeError("Screencast file is empty")
+    webm = resolve_cast_file(Path(webm))
     with tempfile.TemporaryDirectory(prefix="flyhero-sc-") as tmp:
         out = Path(tmp) / "frame.png"
         command = [
@@ -132,7 +148,8 @@ class ShellScreencast:
         self.framerate = framerate
 
     def start(self) -> Path:
-        dest = self.dest or Path(tempfile.gettempdir()) / "flyhero-live.webm"
+        # GNOME 50 rejects a file_template that already has .webm
+        dest = self.dest or Path(tempfile.gettempdir()) / "flyhero-live"
         self._webm = self._starter(dest, framerate=self.framerate)
         return self._webm
 
