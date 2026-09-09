@@ -32,37 +32,93 @@ def paint_receptors(width: int = 200, height: int = 160) -> Image.Image:
     return image
 
 
+def _column_lanes(
+    rgb: Image.Image,
+    *,
+    x0: int,
+    x1: int,
+    y0: int,
+    y1: int,
+    max_distance: float,
+    min_ratio: float,
+) -> set[int]:
+    width = max(x1 - x0, 1)
+    height = max(y1 - y0, 1)
+    pixels = rgb.load()
+    found: set[int] = set()
+    for lane in range(5):
+        lx0 = x0 + int((lane + 0.25) * width / 5)
+        lx1 = x0 + int((lane + 0.75) * width / 5)
+        hits = 0
+        total = 0
+        step_x = max(1, (lx1 - lx0) // 10)
+        step_y = max(1, height // 10)
+        for x in range(lx0, max(lx1, lx0 + 1), step_x):
+            for y in range(y0, y1, step_y):
+                total += 1
+                if classify_pixel(pixels[x, y], max_distance=max_distance) == lane:
+                    hits += 1
+        if total and hits / total >= min_ratio:
+            found.add(lane)
+    return found
+
+
+def _color_lanes(
+    rgb: Image.Image,
+    *,
+    xf0: float,
+    xf1: float,
+    yf0: float,
+    yf1: float,
+    max_distance: float,
+    step: int = 3,
+) -> set[int]:
+    width, height = rgb.size
+    pixels = rgb.load()
+    found: set[int] = set()
+    for y in range(int(height * yf0), max(int(height * yf1), int(height * yf0) + 1), step):
+        for x in range(int(width * xf0), max(int(width * xf1), int(width * xf0) + 1), step):
+            lane = classify_pixel(pixels[x, y], max_distance=max_distance)
+            if lane is not None:
+                found.add(lane)
+    return found
+
+
 def is_highway(
     image: Image.Image,
     *,
     min_lanes: int = 3,
     max_distance: float = LIVE_COLOR_DISTANCE,
 ) -> bool:
-    """True when at least ``min_lanes`` gem colors sit in the bottom band."""
+    """True when gem colors sit on a highway — synthetic or live windowed."""
     if min_lanes < 1:
         raise ValueError("min_lanes must be at least 1")
     rgb = image.convert("RGB")
     width, height = rgb.size
     if width < 20 or height < 20:
         return False
-    pixels = rgb.load()
-    found: set[int] = set()
-    y0 = int(height * 0.70)
-    for lane in range(5):
-        x0 = int((lane + 0.25) * width / 5)
-        x1 = int((lane + 0.75) * width / 5)
-        hits = 0
-        total = 0
-        step_x = max(1, (x1 - x0) // 10)
-        step_y = max(1, (height - y0) // 10)
-        for x in range(x0, max(x1, x0 + 1), step_x):
-            for y in range(y0, height, step_y):
-                total += 1
-                if classify_pixel(pixels[x, y], max_distance=max_distance) == lane:
-                    hits += 1
-        if total and hits / total >= 0.05:
-            found.add(lane)
-    return len(found) >= min_lanes
+    bottom = _column_lanes(
+        rgb,
+        x0=0,
+        x1=width,
+        y0=int(height * 0.70),
+        y1=height,
+        max_distance=max_distance,
+        min_ratio=0.05,
+    )
+    if len(bottom) >= min_lanes:
+        return True
+    # Whole-desktop grab: Clone Hero is a centered window. Menu chrome
+    # lives at the edges; gems sit in the inner highway.
+    inner = _color_lanes(
+        rgb,
+        xf0=0.32,
+        xf1=0.68,
+        yf0=0.30,
+        yf1=0.70,
+        max_distance=max_distance,
+    )
+    return len(inner) >= min_lanes
 
 
 def wait_for_highway(

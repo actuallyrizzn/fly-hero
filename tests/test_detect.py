@@ -20,6 +20,14 @@ def test_receptors_and_painted_gems_are_highway():
     assert is_highway(render_highway(frame), min_lanes=1)
 
 
+def test_live_windowed_highway_and_not_menus():
+    screens = Path(__file__).parent / "fixtures" / "screens"
+    live = Image.open(screens / "live_highway.png")
+    assert is_highway(live)
+    for name in ("title", "profile", "main", "songs", "ready", "update"):
+        assert is_highway(Image.open(screens / f"{name}.png")) is False
+
+
 def test_dark_and_tiny_are_not_highway():
     assert is_highway(Image.new("RGB", (200, 160), (8, 8, 8))) is False
     assert is_highway(Image.new("RGB", (10, 10), (255, 0, 0))) is False

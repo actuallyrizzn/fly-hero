@@ -46,7 +46,12 @@ def main() -> int:
         action="store_true",
         help="live load + highway wait, do not press keys.",
     )
-    parser.add_argument("--countdown", type=float, default=3.0)
+    parser.add_argument(
+        "--countdown",
+        type=float,
+        default=0.0,
+        help="empty-highway seconds after load. 0 once gems are already visible.",
+    )
     args = parser.parse_args()
     if args.live or args.load_only:
         _desktop_env()

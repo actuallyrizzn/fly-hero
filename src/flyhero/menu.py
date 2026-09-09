@@ -53,6 +53,8 @@ class UnknownKey(ValueError):
 
 def key_code(name: str) -> int:
     token = name.lower()
+    if token.startswith("type:"):
+        raise UnknownKey("use tap() for type: payloads")
     if token not in NAMED_CODES:
         raise UnknownKey(f"no menu key {name}")
     return NAMED_CODES[token]
@@ -65,8 +67,12 @@ class RecordingMenu:
         self.taps: list[str] = []
 
     def tap(self, name: str) -> None:
-        key_code(name)
-        self.taps.append(name.lower())
+        token = name.lower()
+        if token.startswith("type:"):
+            self.taps.append(token)
+            return
+        key_code(token)
+        self.taps.append(token)
 
 
 class YdotoolMenu:
@@ -77,9 +83,17 @@ class YdotoolMenu:
         self.env = env
 
     def tap(self, name: str) -> None:
-        code = key_code(name)
         environ = os.environ.copy() if self.env is None else dict(self.env)
         environ.setdefault("YDOTOOL_SOCKET", "/tmp/.ydotool_socket")
+        if name.lower().startswith("type:"):
+            text = name.split(":", 1)[1]
+            self.runner(
+                ["ydotool", "type", "--key-delay", "80", "--", text],
+                check=False,
+                env=environ,
+            )
+            return
+        code = key_code(name)
         self.runner(
             ["ydotool", "key", f"{code}:1", f"{code}:0"],
             check=False,

@@ -94,14 +94,21 @@ def test_keys_for_menu_path():
     assert keys_for("profile", state) == ["a"]
     assert keys_for("update", state) == ["s"]
     assert keys_for("main", state) == ["a"]
-    assert keys_for("songs", state, query="kaz") == ["k", "k", "a", "z", "enter"]
+    assert keys_for("songs", state, query="kaz") == ["k"]
+    assert keys_for("songs", state, query="kaz") == ["type:kaz", "enter"]
+    assert keys_for("songs", state, query="kaz") == ["a"]
+    assert keys_for("songs", state, query="kaz") == []
     assert keys_for("loading", state) == []
     assert keys_for("highway", state) is None
     assert keys_for("error_cli", state) == ["a"]
     assert keys_for("instrument", state) == ["a"]
+    assert keys_for("instrument", state) == []
     assert keys_for("difficulty", state) == ["down", "down", "down", "a"]
     assert keys_for("modifiers", state) == ["a"]
     assert keys_for("ready", state) == ["a"]
+    assert keys_for("title", state) == []
+    assert keys_for("profile", LoaderState(passed={"profile"})) == ["s"]
+    assert keys_for("main", LoaderState(passed={"main"})) == []
     assert keys_for("unknown", LoaderState()) == []
     with pytest.raises(UnknownScreen, match="not recognized"):
         stuck = LoaderState(unknown_streak=3)
@@ -115,6 +122,8 @@ def test_load_until_highway_walks_and_stops():
         Image.open(SCREENS / "title.png"),
         Image.open(SCREENS / "profile.png"),
         Image.open(SCREENS / "main.png"),
+        Image.open(SCREENS / "songs.png"),
+        Image.open(SCREENS / "songs.png"),
         Image.open(SCREENS / "songs.png"),
         Image.open(SCREENS / "instrument.png"),
         Image.open(SCREENS / "difficulty.png"),
@@ -194,7 +203,11 @@ def test_ydotool_menu_injects_runner():
         seen["env"] = env
         seen["check"] = check
 
-    YdotoolMenu(runner=runner, env={"YDOTOOL_SOCKET": "/tmp/.ydotool_socket"}).tap("enter")
+    menu = YdotoolMenu(runner=runner, env={"YDOTOOL_SOCKET": "/tmp/.ydotool_socket"})
+    menu.tap("enter")
     assert seen["cmd"][0] == "ydotool"
     assert "28:1" in seen["cmd"]
     assert seen["env"]["YDOTOOL_SOCKET"] == "/tmp/.ydotool_socket"
+    menu.tap("type:kaz")
+    assert seen["cmd"][:2] == ["ydotool", "type"]
+    assert seen["cmd"][-1] == "kaz"

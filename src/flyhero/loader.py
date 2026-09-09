@@ -12,7 +12,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from flyhero.detect import is_highway
+from flyhero.detect import is_highway, wait_for_highway
 
 SCREENS = (
     "loading",
@@ -50,6 +50,7 @@ class LoaderState:
     setup_steps: int = 0
     unknown_streak: int = 0
     seen: list[str] = field(default_factory=list)
+    passed: set[str] = field(default_factory=set)
 
 
 def _rgb(image: Image.Image) -> Image.Image:
@@ -191,23 +192,56 @@ def keys_for(
     if screen == "error_cli":
         return ["a"]
     if screen == "title":
+        if "title" in state.passed:
+            return []
+        state.passed.add("title")
         return ["enter"]
     if screen == "profile":
+        if "profile" in state.passed or "main" in state.passed:
+            return ["s"]
+        state.passed.add("profile")
         return ["a"]
     if screen == "update":
         return ["s"]
     if screen == "main":
+        state.passed.update({"title", "profile"})
+        if "main" in state.passed:
+            return []
+        state.passed.add("main")
         return ["a"]
     if screen == "songs":
-        letters = [char for char in query.lower() if char.isalpha()]
-        return ["k", *letters, "enter"]
-    if screen in SETUP:
-        index = state.setup_steps
-        state.setup_steps += 1
-        if index == 0:
+        state.passed.update({"title", "profile", "main"})
+        if "songs_search" not in state.passed:
+            state.passed.add("songs_search")
+            return ["k"]
+        if "songs" not in state.passed:
+            state.passed.add("songs")
+            text = "".join(char for char in query.lower() if char.isalpha())
+            return [f"type:{text}", "enter"]
+        if "songs_pick" not in state.passed:
+            state.passed.add("songs_pick")
             return ["a"]
-        if index == 1:
-            return ["down", "down", "down", "a"]
+        return []
+    if screen == "instrument":
+        state.passed.update({"title", "profile", "main", "songs"})
+        if "instrument" in state.passed:
+            return []
+        state.passed.add("instrument")
+        return ["a"]
+    if screen == "difficulty":
+        if "difficulty" in state.passed:
+            return []
+        state.passed.add("difficulty")
+        return ["down", "down", "down", "a"]
+    if screen == "modifiers":
+        if "modifiers" in state.passed:
+            return []
+        state.passed.add("modifiers")
+        return ["a"]
+    if screen == "ready":
+        if "ready" in state.passed:
+            return []
+        state.passed.add("ready")
         return ["a"]
     raise UnknownScreen(f"no action for {screen}")
 
@@ -243,6 +277,13 @@ def load_until_highway(
             press(name)
         if settle:
             pause(settle)
+        if screen == "ready" and keys:
+            return wait_for_highway(
+                grab,
+                timeout=30.0,
+                interval=0.4,
+                sleeper=sleeper,
+            )
     raise LoaderStuck(
         f"highway not reached in {max_steps} steps: {' → '.join(walk.seen)}"
     )
