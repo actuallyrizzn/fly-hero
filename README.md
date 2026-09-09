@@ -15,6 +15,16 @@ Tasks: [Fly Hero board](https://tasks.decisionsciencecorp.com/admin/projects.php
 - **Controls:** fly graph vs scrambled vs features-only.
 - **Slice gate:** ≥90% unit + integration + that slice’s visual end-to-end routes, then commit and push.
 
+## Phase 3 — play
+
+`RecordingHands` turns a chart (or pixel frames) into a fret/strum key log. Clone Hero on ngram should bind guitar to **1–5** and **Down**. Live `DeviceHands` writes those edges to `/dev/uinput`. CI never opens the kernel device.
+
+```bash
+pytest tests/test_play.py
+```
+
+Family charts install on the laptop only: `~/.clonehero/Songs/Thingerthing`. First song: *Thinger's Warmup* (Easy/Medium if the chart has it).
+
 ## Phase 2 — fair eye (pixels)
 
 `PixelEye` turns a highway photograph into the same lanes×depth frame as `ChartEye`. Tests paint a mid-tempo fixture and decode it back — that recorded PNG is the visual route. Live Clone Hero on ngram uses `LivePixelEye` + `grab_clonehero()` (Xwayland `xwininfo` + a screen grab). Same player; swap the eye.
