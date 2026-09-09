@@ -102,10 +102,12 @@ def test_keys_for_menu_path():
     assert keys_for("difficulty", state) == ["down", "down", "down", "a"]
     assert keys_for("modifiers", state) == ["a"]
     assert keys_for("ready", state) == ["a"]
+    assert keys_for("unknown", LoaderState()) == []
     with pytest.raises(UnknownScreen, match="not recognized"):
-        keys_for("unknown", state)
+        stuck = LoaderState(unknown_streak=3)
+        keys_for("unknown", stuck)
     with pytest.raises(UnknownScreen, match="no action"):
-        keys_for("nope", state)
+        keys_for("nope", LoaderState())
 
 
 def test_load_until_highway_walks_and_stops():
@@ -142,12 +144,12 @@ def test_load_until_highway_walks_and_stops():
 def test_load_until_highway_unknown_and_stuck():
     menu = RecordingMenu()
     red = Image.new("RGB", (160, 90), (200, 10, 10))
-    with pytest.raises(UnknownScreen):
+    with pytest.raises(UnknownScreen, match="not recognized"):
         load_until_highway(
             lambda: red,
             menu.tap,
             templates=templates(),
-            max_steps=2,
+            max_steps=8,
             max_mse=10,
         )
     with pytest.raises(LoaderStuck, match="highway not reached"):

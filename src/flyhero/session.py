@@ -158,7 +158,7 @@ def run_live_path(
     waiter=None,
     press=None,
     query: str = DEFAULT_QUERY,
-    settle: float = 0.8,
+    settle: float = 1.2,
     clock=None,
     sleeper=None,
     eye=None,

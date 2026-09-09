@@ -31,6 +31,7 @@ SCREENS = (
 )
 SETUP = frozenset({"instrument", "difficulty", "modifiers", "ready"})
 MAX_STEPS = 24
+UNKNOWN_LIMIT = 4
 DEFAULT_QUERY = "kazotsky"
 TEMPLATE_SIZE = (160, 90)
 TEMPLATE_DIR = Path(__file__).resolve().parent / "screens"
@@ -47,6 +48,7 @@ class LoaderStuck(RuntimeError):
 @dataclass
 class LoaderState:
     setup_steps: int = 0
+    unknown_streak: int = 0
     seen: list[str] = field(default_factory=list)
 
 
@@ -175,10 +177,17 @@ def keys_for(
     """Keys for this frame. ``None`` means the highway is up."""
     if screen == "highway":
         return None
+    if screen == "unknown":
+        state.unknown_streak += 1
+        if state.unknown_streak >= UNKNOWN_LIMIT:
+            raise UnknownScreen(
+                "Clone Hero screen was not recognized: "
+                + " → ".join(state.seen[-8:] or ["unknown"])
+            )
+        return []
+    state.unknown_streak = 0
     if screen == "loading":
         return []
-    if screen == "unknown":
-        raise UnknownScreen("Clone Hero screen was not recognized")
     if screen == "error_cli":
         return ["a"]
     if screen == "title":
@@ -226,6 +235,7 @@ def load_until_highway(
         last = frame
         screen = classify(frame, templates=templates, max_mse=max_mse)
         walk.seen.append(screen)
+        print(f"loader: {screen}", flush=True)
         keys = keys_for(screen, walk, query=query)
         if keys is None:
             return frame
