@@ -52,6 +52,7 @@ class LoaderState:
     seen: list[str] = field(default_factory=list)
     passed: set[str] = field(default_factory=set)
     highway_hits: int = 0
+    title_tries: int = 0
 
 
 def _rgb(image: Image.Image) -> Image.Image:
@@ -193,9 +194,10 @@ def keys_for(
     if screen == "error_cli":
         return ["a"]
     if screen == "title":
-        if "title" in state.passed:
-            return []
         state.passed.add("title")
+        if state.title_tries >= 4:
+            return []
+        state.title_tries += 1
         return ["enter"]
     if screen == "profile":
         if "profile" in state.passed or "main" in state.passed:
