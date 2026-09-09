@@ -13,6 +13,7 @@ from flyhero.launch import (
     reject_bot_preview,
     song_folder,
     start_clonehero,
+    stop_clonehero,
 )
 
 
@@ -102,6 +103,25 @@ def test_start_clonehero_injects_runner_and_blocks_bot():
     assert seen["command"][0].endswith("clonehero")
     with pytest.raises(BotPreviewForbidden):
         start_clonehero(["clonehero", "--player", "Guitar,Easy"], runner=runner)
+
+
+def test_stop_clonehero_pkills():
+    seen = {}
+
+    def runner(cmd, check=False):
+        seen["cmd"] = cmd
+        seen["check"] = check
+
+    stop_clonehero(runner=runner)
+    assert seen["cmd"] == ["pkill", "-x", "clonehero"]
+    assert seen["check"] is False
+
+
+def test_stop_clonehero_uses_run(monkeypatch):
+    import subprocess
+
+    monkeypatch.setattr(subprocess, "run", lambda cmd, check=False: ("run", cmd, check))
+    assert stop_clonehero() is None
 
 
 def test_start_clonehero_uses_popen(monkeypatch):

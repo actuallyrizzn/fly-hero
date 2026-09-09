@@ -63,9 +63,13 @@ If the highway never appears, the bug is the loader, not the fly. Fix the loader
 
 ```bash
 # CI / teach + score (no game)
-python tools/run_session.py --offline tests/fixtures/midtempo.chart
+python tools/run_session.py --offline tests/fixtures/midtempo.chart --track ExpertSingle
 
-# ngram demo — only after probe is ready
+# ngram: prove the song loaded (no keys)
+python tools/run_session.py --load-only --track EasySingle \
+  ~/.clonehero/Songs/Thingerthing/Covers\ &\ vGH\'s/Kazotsky\ Kick\ vGH/notes.chart
+
+# ngram demo — same player as offline, uinput into Clone Hero
 python tools/run_session.py --live --track EasySingle \
   ~/.clonehero/Songs/Thingerthing/Covers\ &\ vGH\'s/Kazotsky\ Kick\ vGH/notes.chart
 ```

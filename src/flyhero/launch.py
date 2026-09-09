@@ -99,6 +99,15 @@ def bot_preview_argv(
     )
 
 
+def stop_clonehero(*, name: str = "clonehero", runner=None) -> None:
+    """Stop a leftover game so --song starts clean. Tests inject ``runner``."""
+    if runner is None:
+        import subprocess
+
+        runner = subprocess.run
+    runner(["pkill", "-x", name], check=False)
+
+
 def start_clonehero(argv: list[str] | tuple[str, ...], runner=None):
     """Spawn Clone Hero. Tests inject ``runner``; live uses Popen."""
     command = list(argv)

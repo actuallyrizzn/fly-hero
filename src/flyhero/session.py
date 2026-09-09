@@ -8,7 +8,7 @@ from pathlib import Path
 from flyhero.chart import Chart, load_chart, pick_track
 from flyhero.detect import wait_for_highway
 from flyhero.guitar import GuitarMap
-from flyhero.launch import load_song_argv, start_clonehero
+from flyhero.launch import load_song_argv, song_folder, start_clonehero, stop_clonehero
 from flyhero.live import play_live
 from flyhero.play import record_chart
 from flyhero.score import ScoreReport, score_log
@@ -87,12 +87,17 @@ def run_live(
     stopper=None,
     clock=None,
     sleeper=None,
+    eye=None,
+    play=True,
 ) -> SessionResult:
     """Load the song, wait for the highway, play, score. Inject I/O in tests."""
     if grab is None:
         raise ValueError("live session needs a frame grabber")
     command = argv if argv is not None else load_song_argv(song or ".")
     taught = readout
+    mapping = getattr(hands, "mapping", None) or getattr(
+        getattr(hands, "log", None), "mapping", None
+    )
     if taught is None:
         taught = run_offline(
             chart,
@@ -100,23 +105,24 @@ def run_live(
             look_ahead=look_ahead,
             depth=depth,
             window=window,
-            mapping=getattr(hands, "mapping", None)
-            or getattr(getattr(hands, "log", None), "mapping", None),
+            mapping=mapping,
         ).readout
     proc = start(command)
     try:
         waiter(grab)
-        play_live(
-            chart,
-            hands,
-            readout=taught,
-            look_ahead=look_ahead,
-            depth=depth,
-            step=step,
-            countdown=countdown,
-            clock=clock,
-            sleeper=sleeper,
-        )
+        if play:
+            play_live(
+                chart,
+                hands,
+                eye=eye,
+                readout=taught,
+                look_ahead=look_ahead,
+                depth=depth,
+                step=step,
+                countdown=countdown,
+                clock=clock,
+                sleeper=sleeper,
+            )
     finally:
         if stopper is not None:
             stopper(proc)
@@ -129,4 +135,67 @@ def run_live(
         log=log,
         score=score_log(chart, log, window=window),
         readout=taught,
+    )
+
+
+def run_live_path(
+    path: Path | str,
+    *,
+    track: str = "auto",
+    countdown: float = 3.0,
+    look_ahead: float = 1.5,
+    depth: int = DEFAULT_DEPTH,
+    step: float = 0.02,
+    window: float = 0.12,
+    play: bool = True,
+    keep_game: bool = True,
+    grab=None,
+    start=None,
+    stopper=None,
+    killer=None,
+    waiter=wait_for_highway,
+    clock=None,
+    sleeper=None,
+    eye=None,
+    hands=None,
+    readout: LinearReadout | None = None,
+    mapping: GuitarMap | None = None,
+) -> SessionResult:
+    """Ngram entry: stop leftover game, ``--song`` load, wait, play, score."""
+    from flyhero.shellcast import snapshot_frame
+
+    text = Path(path).read_text(encoding="utf-8")
+    chosen = pick_track(text, track)
+    chart = load_chart(path, track=chosen)
+    guitar = mapping or GuitarMap.clone_hero_keyboard()
+    if hands is None:
+        hands = RecordingHands(guitar)
+    (killer or stop_clonehero)()
+    argv = load_song_argv(song_folder(path))
+    result = run_live(
+        chart,
+        hands,
+        start=start or start_clonehero,
+        grab=grab or snapshot_frame,
+        song=song_folder(path),
+        countdown=countdown,
+        look_ahead=look_ahead,
+        depth=depth,
+        step=step,
+        window=window,
+        readout=readout,
+        argv=argv,
+        waiter=waiter,
+        stopper=stopper if stopper is not None else (lambda proc: None if keep_game else proc.terminate()),
+        clock=clock,
+        sleeper=sleeper,
+        eye=eye,
+        play=play,
+    )
+    return SessionResult(
+        chart=result.chart,
+        track=chosen,
+        log=result.log,
+        score=result.score,
+        readout=result.readout,
     )

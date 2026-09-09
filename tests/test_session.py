@@ -7,7 +7,7 @@ import pytest
 from flyhero.chart import load_chart, pick_track
 from flyhero.detect import paint_receptors
 from flyhero.launch import load_song_argv
-from flyhero.session import run_live, run_offline, run_offline_path
+from flyhero.session import run_live, run_live_path, run_offline, run_offline_path
 from flyhero.uinput_hands import DeviceHands, RecordingHands, TeeHands
 
 FIXTURE = Path(__file__).parent / "fixtures" / "midtempo.chart"
@@ -144,3 +144,89 @@ def test_live_scores_tee_hands_log():
     )
     assert result.log is hands.log
     assert result.score.accepted()
+
+
+def test_live_load_only_does_not_play():
+    clock = Clock()
+    hands = RecordingHands()
+    result = run_live(
+        load_chart(FIXTURE),
+        hands,
+        start=lambda argv: type("P", (), {})(),
+        grab=paint_receptors,
+        argv=["clonehero", "--song", "/tmp/tune"],
+        play=False,
+        readout=run_offline(load_chart(FIXTURE)).readout,
+        waiter=lambda _grab: paint_receptors(),
+        stopper=lambda proc: None,
+        clock=clock.now,
+        sleeper=clock.sleep,
+    )
+    assert hands.events == []
+    assert result.score.hits == 0
+
+
+def test_live_path_kills_then_loads(tmp_path: Path):
+    killed = []
+    started = []
+    chart = FIXTURE.read_text(encoding="utf-8")
+    song = tmp_path / "Kazotsky"
+    song.mkdir()
+    notes = song / "notes.chart"
+    notes.write_text(chart, encoding="utf-8")
+    clock = Clock()
+    result = run_live_path(
+        notes,
+        track="ExpertSingle",
+        countdown=0.0,
+        look_ahead=1.0,
+        depth=4,
+        step=0.25,
+        window=0.3,
+        play=True,
+        keep_game=True,
+        grab=paint_receptors,
+        start=lambda argv: started.append(argv) or "proc",
+        killer=lambda: killed.append(True),
+        waiter=lambda _grab: paint_receptors(),
+        clock=clock.now,
+        sleeper=clock.sleep,
+        hands=RecordingHands(),
+        readout=run_offline(load_chart(FIXTURE)).readout,
+    )
+    assert killed == [True]
+    assert "--song" in started[0]
+    assert "--player" not in started[0]
+    assert result.track == "ExpertSingle"
+    assert result.score.accepted()
+
+
+def test_live_path_can_stop_game(tmp_path: Path):
+    class Proc:
+        def terminate(self) -> None:
+            self.dead = True
+
+    proc = Proc()
+    song = tmp_path / "s"
+    song.mkdir()
+    (song / "notes.chart").write_text(FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+    clock = Clock()
+    run_live_path(
+        song / "notes.chart",
+        track="ExpertSingle",
+        countdown=0.0,
+        look_ahead=1.0,
+        depth=4,
+        step=0.5,
+        window=0.3,
+        play=False,
+        keep_game=False,
+        grab=paint_receptors,
+        start=lambda argv: proc,
+        killer=lambda: None,
+        waiter=lambda _grab: paint_receptors(),
+        clock=clock.now,
+        sleeper=clock.sleep,
+        readout=run_offline(load_chart(FIXTURE)).readout,
+    )
+    assert proc.dead is True

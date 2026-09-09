@@ -22,6 +22,10 @@ SHELL_NAME = "org.gnome.Shell.Screencast"
 SHELL_PATH = "/org/gnome/Shell/Screencast"
 SHELL_IFACE = "org.gnome.Shell.Screencast"
 DEFAULT_FRAMERATE = 15
+SNAPSHOT_PIPELINE = (
+    "videoconvert chroma-mode=none dither=none matrix-mode=output-only "
+    "! pngenc snapshot=true"
+)
 
 FfmpegRunner = Callable[..., subprocess.CompletedProcess]
 
@@ -89,6 +93,48 @@ def resolve_cast_file(path: Path) -> Path:
     if not found:
         raise RuntimeError("Screencast file is empty")
     return max(found, key=lambda p: p.stat().st_mtime)
+
+
+def snapshot_frame(
+    dest: Path | None = None,
+    *,
+    bus=None,
+    wait: float = 1.15,
+    sleeper=None,
+    iface=None,
+) -> Image.Image:
+    """One-shot PNG via GNOME's snapshot pipeline. VP8 webm extract is flaky."""
+    dest = Path(dest or Path(tempfile.gettempdir()) / "flyhero-snap")
+    if dest.suffix:
+        dest = dest.with_suffix("")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    owned = iface is None
+    if owned:
+        import dbus
+
+        stop_screencast(bus)
+        iface = _iface(bus)
+        options = {
+            "pipeline": SNAPSHOT_PIPELINE,
+            "framerate": dbus.UInt32(5),
+            "draw-cursor": False,
+        }
+    else:
+        if bus is not None:
+            stop_screencast(bus)
+        options = {
+            "pipeline": SNAPSHOT_PIPELINE,
+            "framerate": 5,
+            "draw-cursor": False,
+        }
+    ok, used = iface.Screencast(str(dest), options)
+    if not ok:
+        raise RuntimeError("GNOME Shell.Screencast snapshot refused")
+    (sleeper or time.sleep)(wait)
+    if owned or bus is not None:
+        stop_screencast(bus)
+    path = resolve_cast_file(Path(str(used)))
+    return require_visible(Image.open(path).convert("RGB"))
 
 
 def extract_frame(

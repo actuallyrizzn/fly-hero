@@ -6,7 +6,13 @@ import pytest
 from PIL import Image
 
 from flyhero.pipewire import ScreenCastSession, grab_desktop_frame
-from flyhero.shellcast import ShellScreencast, extract_frame, start_screencast, stop_screencast
+from flyhero.shellcast import (
+    ShellScreencast,
+    extract_frame,
+    snapshot_frame,
+    start_screencast,
+    stop_screencast,
+)
 
 
 def _rgb(color, size=(64, 48)) -> Image.Image:
@@ -209,3 +215,28 @@ def test_start_screencast_refuses():
             start_screencast(Path("/tmp/cast.webm"), bus=Bus())
     finally:
         sys.modules.pop("dbus", None)
+
+
+def test_snapshot_frame_reads_png(tmp_path: Path):
+    painted = _rgb((40, 90, 40), (48, 32))
+    out = tmp_path / "snap.png"
+    painted.save(out)
+
+    class Iface:
+        def Screencast(self, dest, options):
+            assert "pngenc" in options["pipeline"]
+            return True, str(out)
+
+    slept = []
+    image = snapshot_frame(tmp_path / "snap.png", iface=Iface(), sleeper=slept.append, wait=0.2)
+    assert slept == [0.2]
+    assert image.size == (48, 32)
+
+
+def test_snapshot_frame_refuses():
+    class Iface:
+        def Screencast(self, dest, options):
+            return False, dest
+
+    with pytest.raises(RuntimeError, match="snapshot refused"):
+        snapshot_frame(iface=Iface(), sleeper=lambda _t: None, wait=0)

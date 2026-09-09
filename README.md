@@ -30,6 +30,7 @@ Repo / CI map is **1–5** and **Down**. Live Clone Hero on ngram uses the **sto
 ```bash
 python tools/run_session.py --offline tests/fixtures/midtempo.chart --track ExpertSingle
 pytest tests/test_play.py tests/test_score.py tests/test_session.py
+# ngram: python tools/run_session.py --live --track EasySingle <notes.chart>
 ```
 
 Family charts live on the laptop only: `~/.clonehero/Songs/Thingerthing`. First song: **Kazotsky Kick vGH**, Easy (36s, already on disk). Leave Clone Hero on stock keys, then:
