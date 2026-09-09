@@ -185,12 +185,11 @@ def test_grab_clonehero_sets_display(monkeypatch):
     painted = render_highway(midtempo_frame())
     monkeypatch.setattr(
         "flyhero.capture.find_clonehero_box",
-        lambda title="Clone Hero": WindowBox(1, 2, 3, 4),
+        lambda title="Clone Hero": WindowBox(0, 0, painted.size[0], painted.size[1]),
     )
-    monkeypatch.setattr("flyhero.capture.grab_box", lambda box: painted)
     previous = os.environ.get("DISPLAY")
     try:
-        image = grab_clonehero(display=":9")
+        image = grab_clonehero(display=":9", frame_grabber=lambda: painted)
         assert os.environ["DISPLAY"] == ":9"
         assert image.size == painted.size
     finally:

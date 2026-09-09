@@ -1,7 +1,10 @@
 """Grab the Clone Hero window when a desktop is present.
 
-CI never needs this. Tests feed recorded frames. Live play on ngram uses
-xwininfo + PIL ImageGrab over Xwayland.
+CI never needs this. Tests feed recorded frames.
+
+Live play on ngram uses Mutter ScreenCast → PipeWire (clean RGB), then
+crops with xwininfo geometry. X11 ImageGrab of Unity is black — do not
+use it as the fair eye.
 """
 
 from __future__ import annotations
@@ -14,7 +17,11 @@ from dataclasses import dataclass
 
 from PIL import Image
 
+from flyhero.pipewire import grab_desktop_frame
+from flyhero.visibility import require_visible
+
 XwininfoRunner = Callable[[list[str]], str]
+FrameGrabber = Callable[[], Image.Image]
 
 
 @dataclass(frozen=True)
@@ -26,7 +33,7 @@ class WindowBox:
 
     @property
     def bbox(self) -> tuple[int, int, int, int]:
-        """PIL ImageGrab bbox: left, top, right, bottom."""
+        """left, top, right, bottom in the same space as the frame."""
         return (self.left, self.top, self.left + self.width, self.top + self.height)
 
 
@@ -67,7 +74,31 @@ def find_clonehero_box(
     return parse_xwininfo(text)
 
 
+def crop_to_box(
+    image: Image.Image,
+    box: WindowBox,
+    *,
+    screen_size: tuple[int, int] | None = None,
+) -> Image.Image:
+    """Crop a monitor frame to the Clone Hero window. Scales if stream ≠ screen."""
+    width, height = image.size
+    screen_w, screen_h = screen_size or (width, height)
+    if screen_w <= 0 or screen_h <= 0:
+        raise ValueError("screen size must be positive")
+    scale_x = width / screen_w
+    scale_y = height / screen_h
+    left = max(0, int(round(box.left * scale_x)))
+    top = max(0, int(round(box.top * scale_y)))
+    right = min(width, int(round((box.left + box.width) * scale_x)))
+    bottom = min(height, int(round((box.top + box.height) * scale_y)))
+    if right - left < 8 or bottom - top < 8:
+        return image
+    cropped = image.crop((left, top, right, bottom))
+    return cropped.convert("RGB") if cropped.mode != "RGB" else cropped
+
+
 def grab_box(box: WindowBox, grabber=None) -> Image.Image:
+    """Legacy X11 grab. Kept for tests. Live eye must not use this."""
     if grabber is None:
         from PIL import ImageGrab
 
@@ -79,7 +110,23 @@ def grab_box(box: WindowBox, grabber=None) -> Image.Image:
     return image
 
 
-def grab_clonehero(*, title: str = "Clone Hero", display: str | None = None) -> Image.Image:
+def grab_clonehero(
+    *,
+    title: str = "Clone Hero",
+    display: str | None = None,
+    frame_grabber: FrameGrabber | None = None,
+    box_finder: Callable[..., WindowBox] | None = None,
+    screen_size: tuple[int, int] | None = None,
+) -> Image.Image:
+    """PipeWire monitor frame, cropped to the Clone Hero window when found."""
     if display:
         os.environ["DISPLAY"] = display
-    return grab_box(find_clonehero_box(title=title))
+    image = require_visible((frame_grabber or grab_desktop_frame)())
+    finder = box_finder or find_clonehero_box
+    try:
+        box = finder(title=title)
+    except TypeError:
+        box = finder()
+    except FileNotFoundError:
+        return image
+    return crop_to_box(image, box, screen_size=screen_size)

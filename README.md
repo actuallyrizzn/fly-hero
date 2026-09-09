@@ -17,24 +17,37 @@ Tasks: [Fly Hero board](https://tasks.decisionsciencecorp.com/admin/projects.php
 
 ## Phase 3 — play
 
-`RecordingHands` turns a chart (or pixel frames) into a fret/strum key log. Clone Hero on ngram should bind guitar to **1–5** and **Down**. Live `DeviceHands` writes those edges to `/dev/uinput`. CI never opens the kernel device.
+`RecordingHands` turns a chart (or pixel frames) into a fret/strum key log. Live `DeviceHands` writes those edges to `/dev/uinput`. CI never opens the kernel device.
+
+Repo / CI map is **1–5** and **Down**. Live Clone Hero on ngram uses the **stock keyboard**: **A S J K L** and **Down** (`--map clone-hero`, the default). Do not mix the two.
 
 ```bash
 pytest tests/test_play.py
 ```
 
-Family charts live on the laptop only: `~/.clonehero/Songs/Thingerthing`. First song: **Kazotsky Kick vGH**, Easy (36s, already on disk). Bind Clone Hero to **1–5** and **Down**, then:
+Family charts live on the laptop only: `~/.clonehero/Songs/Thingerthing`. First song: **Kazotsky Kick vGH**, Easy (36s, already on disk). Leave Clone Hero on stock keys, then:
 
 ```bash
-python tools/play_live.py --track EasySingle ~/.clonehero/Songs/Thingerthing/Covers\ &\ vGH\'s/Kazotsky\ Kick\ vGH/notes.chart
+python tools/play_live.py --pixels --track EasySingle \
+  ~/.clonehero/Songs/Thingerthing/Covers\ &\ vGH\'s/Kazotsky\ Kick\ vGH/notes.chart
 ```
+
+POC / no pixels (chart-as-picture eye): omit `--pixels`.
 
 ## Phase 2 — fair eye (pixels)
 
-`PixelEye` turns a highway photograph into the same lanes×depth frame as `ChartEye`. Tests paint a mid-tempo fixture and decode it back — that recorded PNG is the visual route. Live Clone Hero on ngram uses `LivePixelEye` + `grab_clonehero()` (Xwayland `xwininfo` + a screen grab). Same player; swap the eye.
+`PixelEye` turns a highway photograph into the same lanes×depth frame as `ChartEye`. Tests paint a mid-tempo fixture and decode it back — that recorded PNG is the visual route.
+
+Live Clone Hero on ngram uses **GNOME Shell.Screencast** (clean 1920×1080 compositor frames) via `ScreenCastSession` + `grab_clonehero()`, then crops with `xwininfo` geometry. Raw `gst-launch pipewiresrc` on this box negotiates YUY2 and scrambles the picture — do not use that as the fair eye. X11 `ImageGrab` of Unity is black; kmsgrab of Intel CCS tiles is noise. Same player; swap the eye.
 
 ```bash
-pytest tests/test_pixel_eye.py
+pytest tests/test_pixel_eye.py tests/test_pipewire.py
+```
+
+Prove one clean RGB frame on ngram (session bus + PipeWire, SSH as `rizzn`):
+
+```bash
+python tools/grab_frame.py -o /tmp/flyhero-vis/pipewire.png
 ```
 
 ## Phase 1 — POC eye
@@ -65,6 +78,8 @@ On ngram, after Clone Hero is unpacked to `~/Games/clonehero`:
 ```bash
 DISPLAY=:0 python -c 'from flyhero.desktop import probe; print(probe())'
 ```
+
+The ngram venv must see Ubuntu’s `python3-dbus` and `python3-gi` (Mutter ScreenCast). After `python3 -m venv .venv`, set `include-system-site-packages = true` in `.venv/pyvenv.cfg`.
 
 ## Not this repo
 

@@ -1,6 +1,7 @@
-"""Virtual guitar mapping. Clone Hero defaults: frets 1–5, strum Down.
+"""Virtual guitar mapping.
 
-Bind Clone Hero's keyboard guitar to the same keys before a live run.
+Repo / CI default: frets 1–5, strum Down.
+Live Clone Hero stock keyboard: A S J K L + Down (`GuitarMap.clone_hero_keyboard()`).
 """
 
 from __future__ import annotations
@@ -18,11 +19,17 @@ KEY_2 = 3
 KEY_3 = 4
 KEY_4 = 5
 KEY_5 = 6
+KEY_A = 30
+KEY_S = 31
+KEY_J = 36
+KEY_K = 37
+KEY_L = 38
 KEY_UP = 103
 KEY_DOWN = 108
 
 DEFAULT_FRET_CODES: tuple[int, ...] = (KEY_1, KEY_2, KEY_3, KEY_4, KEY_5)
 DEFAULT_STRUM_CODE = KEY_DOWN
+CLONE_HERO_FRET_CODES: tuple[int, ...] = (KEY_A, KEY_S, KEY_J, KEY_K, KEY_L)
 
 CODE_NAME = {
     KEY_1: "1",
@@ -30,6 +37,11 @@ CODE_NAME = {
     KEY_3: "3",
     KEY_4: "4",
     KEY_5: "5",
+    KEY_A: "a",
+    KEY_S: "s",
+    KEY_J: "j",
+    KEY_K: "k",
+    KEY_L: "l",
     KEY_UP: "up",
     KEY_DOWN: "down",
 }
@@ -46,6 +58,11 @@ class GuitarMap:
 
     def name(self, code: int) -> str:
         return CODE_NAME.get(code, str(code))
+
+    @classmethod
+    def clone_hero_keyboard(cls) -> GuitarMap:
+        """Stock Clone Hero keyboard: A S J K L + Down."""
+        return cls(fret_codes=CLONE_HERO_FRET_CODES, strum_code=KEY_DOWN)
 
 
 @dataclass(frozen=True)

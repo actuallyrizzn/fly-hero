@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from flyhero.chart import load_chart
-from flyhero.guitar import EV_KEY, GuitarMap, KeyEvent, diff_action
+from flyhero.guitar import EV_KEY, GuitarMap, KeyEvent, diff_action, KEY_A, KEY_DOWN
 from flyhero.pixel import render_highway
 from flyhero.pixel_eye import PixelEye
 from flyhero.play import record_chart
@@ -95,10 +95,16 @@ def test_diff_and_device_edges():
 def test_open_uinput_factory_and_map_guard():
     device = open_uinput(factory=lambda codes: FakeDevice(codes))
     assert device.codes == [2, 3, 4, 5, 6, 108]
+    stock_dev = open_uinput(GuitarMap.clone_hero_keyboard(), factory=lambda codes: FakeDevice(codes))
+    assert stock_dev.codes[0] == KEY_A
     with pytest.raises(ValueError, match="fret codes"):
         GuitarMap(fret_codes=(1, 2))
     event = KeyEvent(1.5, "1", False)
     assert event.render() == "1.50 1 up"
+    stock = GuitarMap.clone_hero_keyboard()
+    assert stock.fret_codes[0] == KEY_A
+    assert stock.strum_code == KEY_DOWN
+    assert stock.name(KEY_A) == "a"
 
 
 def test_record_rejects_bad_step():
