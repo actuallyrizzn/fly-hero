@@ -120,15 +120,14 @@ def test_start_clonehero_injects_runner_and_blocks_bot():
 
 
 def test_stop_clonehero_pkills():
-    seen = {}
+    seen = []
 
     def runner(cmd, check=False):
-        seen["cmd"] = cmd
-        seen["check"] = check
+        seen.append(cmd)
 
     stop_clonehero(runner=runner)
-    assert seen["cmd"] == ["pkill", "-x", "clonehero"]
-    assert seen["check"] is False
+    assert seen[0] == ["pkill", "-x", "clonehero"]
+    assert seen[1] == ["pkill", "-9", "-x", "clonehero"]
 
 
 def test_stop_clonehero_uses_run(monkeypatch):

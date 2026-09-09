@@ -277,7 +277,7 @@ def load_until_highway(
             press(name)
         if settle:
             pause(settle)
-        if screen == "ready" and keys:
+        if screen == "ready" and keys and "songs" in walk.passed:
             return wait_for_highway(
                 grab,
                 timeout=30.0,

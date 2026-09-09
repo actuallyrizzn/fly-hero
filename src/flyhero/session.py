@@ -176,7 +176,13 @@ def run_live_path(
     guitar = mapping or GuitarMap.clone_hero_keyboard()
     if hands is None:
         hands = RecordingHands(guitar)
-    (killer or stop_clonehero)()
+    if killer is not None:
+        killer()
+    else:
+        import time
+
+        stop_clonehero()
+        time.sleep(1.0)
     tap = press if press is not None else default_menu().tap
     wait = waiter
     if wait is None:

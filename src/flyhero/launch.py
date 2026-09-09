@@ -131,6 +131,7 @@ def stop_clonehero(*, name: str = "clonehero", runner=None) -> None:
 
         runner = subprocess.run
     runner(["pkill", "-x", name], check=False)
+    runner(["pkill", "-9", "-x", name], check=False)
 
 
 def start_clonehero(argv: list[str] | tuple[str, ...], runner=None):
