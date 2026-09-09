@@ -1,8 +1,9 @@
-"""Start Clone Hero on a song. Otto does not play; the fly does.
+"""Start Clone Hero. Otto does not play; the fly does.
 
-Clone Hero's ``--song --player Guitar,Easy`` path is a *bot preview*.
-The PRD forbids that bot as the fly. The harness only passes ``--song``
-so the highway comes up for a real controller (uinput).
+Clone Hero's ``--song`` flag without ``--player`` errors
+("No players were loaded"). ``--song --player`` is their chart-preview
+bot. The PRD forbids that bot as the fly. Live start is windowed
+Clone Hero with no song flags — ``flyhero.loader`` walks the menus.
 """
 
 from __future__ import annotations
@@ -44,6 +45,30 @@ def song_folder(path: Path | str) -> Path:
     return folder
 
 
+def game_argv(
+    *,
+    config: HostConfig | None = None,
+    width: int = 1280,
+    height: int = 720,
+    fullscreen: bool = False,
+) -> list[str]:
+    """Windowed Clone Hero. No ``--song``, no ``--player``."""
+    host = config or HostConfig()
+    if width < 1 or height < 1:
+        raise ValueError("window size must be positive")
+    argv = [
+        str(host.clonehero_bin),
+        "-screen-fullscreen",
+        "1" if fullscreen else "0",
+        "-screen-width",
+        str(width),
+        "-screen-height",
+        str(height),
+    ]
+    reject_bot_preview(argv)
+    return argv
+
+
 def load_song_argv(
     song: Path | str,
     *,
@@ -52,7 +77,7 @@ def load_song_argv(
     height: int = 720,
     fullscreen: bool = False,
 ) -> list[str]:
-    """Argv that opens a song folder. Never adds ``--player`` (that is the bot)."""
+    """Documented ``--song`` argv. Live load does not use this — it errors."""
     host = config or HostConfig()
     if width < 1 or height < 1:
         raise ValueError("window size must be positive")

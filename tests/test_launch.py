@@ -9,6 +9,7 @@ from flyhero.launch import (
     DEFAULT_FIRST_SONG,
     BotPreviewForbidden,
     bot_preview_argv,
+    game_argv,
     load_song_argv,
     reject_bot_preview,
     song_folder,
@@ -25,6 +26,19 @@ def test_song_folder_from_chart_and_dir(tmp_path: Path):
     assert song_folder(chart) == folder
     assert song_folder(folder) == folder
     assert song_folder(folder / "notes.mid") == folder
+
+
+def test_game_argv_windowed_no_song(tmp_path: Path):
+    binary = tmp_path / "clonehero"
+    binary.write_text("#!/bin/sh\n", encoding="utf-8")
+    binary.chmod(0o755)
+    argv = game_argv(config=HostConfig(clonehero_bin=binary), width=1280, height=720)
+    assert argv[0] == str(binary)
+    assert "--song" not in argv
+    assert "--player" not in argv
+    assert argv[argv.index("-screen-fullscreen") + 1] == "0"
+    with pytest.raises(ValueError, match="positive"):
+        game_argv(config=HostConfig(clonehero_bin=binary), width=0, height=720)
 
 
 def test_load_song_argv_windowed_no_bot(tmp_path: Path):

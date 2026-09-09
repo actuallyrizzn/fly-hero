@@ -6,9 +6,13 @@ import pytest
 
 from flyhero.chart import load_chart, pick_track
 from flyhero.detect import paint_receptors
-from flyhero.launch import load_song_argv
+from flyhero.launch import game_argv
+from flyhero.menu import RecordingMenu
 from flyhero.session import run_live, run_live_path, run_offline, run_offline_path
 from flyhero.uinput_hands import DeviceHands, RecordingHands, TeeHands
+from PIL import Image
+
+SCREENS = Path(__file__).parent / "fixtures" / "screens"
 
 FIXTURE = Path(__file__).parent / "fixtures" / "midtempo.chart"
 
@@ -63,7 +67,7 @@ def test_live_session_uses_loader_not_bot():
         hands,
         start=start,
         grab=paint_receptors,
-        argv=load_song_argv(FIXTURE),
+        argv=game_argv(),
         countdown=0.0,
         look_ahead=1.0,
         depth=4,
@@ -75,7 +79,7 @@ def test_live_session_uses_loader_not_bot():
         sleeper=clock.sleep,
     )
     assert "--player" not in started[0]
-    assert "--song" in started[0]
+    assert "--song" not in started[0]
     assert stopped == ["proc"]
     assert result.score.accepted()
 
@@ -195,7 +199,7 @@ def test_live_path_kills_then_loads(tmp_path: Path):
         readout=run_offline(load_chart(FIXTURE)).readout,
     )
     assert killed == [True]
-    assert "--song" in started[0]
+    assert "--song" not in started[0]
     assert "--player" not in started[0]
     assert result.track == "ExpertSingle"
     assert result.score.accepted()
@@ -230,3 +234,34 @@ def test_live_path_can_stop_game(tmp_path: Path):
         readout=run_offline(load_chart(FIXTURE)).readout,
     )
     assert proc.dead is True
+
+
+def test_live_path_default_waiter_walks_menus(tmp_path: Path):
+    frames = [
+        Image.open(SCREENS / "title.png"),
+        Image.open(SCREENS / "main.png"),
+        paint_receptors(),
+    ]
+    menu = RecordingMenu()
+    song = tmp_path / "s"
+    song.mkdir()
+    (song / "notes.chart").write_text(FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+    clock = Clock()
+    started = []
+    run_live_path(
+        song / "notes.chart",
+        track="ExpertSingle",
+        play=False,
+        keep_game=True,
+        grab=lambda: frames.pop(0),
+        start=lambda argv: started.append(argv) or "proc",
+        killer=lambda: None,
+        press=menu.tap,
+        settle=0.0,
+        clock=clock.now,
+        sleeper=clock.sleep,
+        readout=run_offline(load_chart(FIXTURE)).readout,
+        hands=RecordingHands(),
+    )
+    assert "--song" not in started[0]
+    assert menu.taps[0] == "enter"

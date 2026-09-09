@@ -39,7 +39,7 @@ def main() -> int:
     parser.add_argument(
         "--live",
         action="store_true",
-        help="ngram: --song load, wait for highway, play, score.",
+        help="ngram: walk menus to the highway, play, score.",
     )
     parser.add_argument(
         "--load-only",

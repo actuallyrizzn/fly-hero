@@ -10,7 +10,7 @@ Otto builds this. The readout plays. Nobody sits in Clone Hero teaching a human 
 | **Readout** | Hold frets and strum from a highway *picture* | Receive hit clocks |
 | **Otto** | Write tests, keep the pipeline green, watch a demo | Play the song |
 
-Clone Hero’s official `--song --player Guitar,Easy` path is their **chart-preview bot**. The PRD forbids that bot as the fly. The harness may pass `--song` only.
+Clone Hero’s official `--song --player Guitar,Easy` path is their **chart-preview bot**. The PRD forbids that bot as the fly. The harness never passes `--player`. It also does not pass `--song` — that errors unless a player (the bot) is loaded. Live load is a menu state machine.
 
 ## One pipeline, two hosts
 
@@ -22,8 +22,8 @@ chart
   ├─► 3. score   log vs chart notes → accept / reject
   │
   └─► 4. live (ngram only)
-         launch --song → wait until highway is visible → play_live
-         → same scorer on the same kind of log
+         launch windowed Clone Hero → classify frame → one key → highway
+         → play_live → same scorer on the same kind of log
 ```
 
 CI always runs 1–3 on `tests/fixtures/midtempo.chart`. The laptop is a *demo of the repo*, not a second training method.
@@ -51,13 +51,13 @@ A note is a **hit** when, inside `[t − window, t + window]`, the matching fret
 ## Stage 4 — Live (ngram)
 
 1. `probe()` — Clone Hero binary, `/dev/uinput`, `DISPLAY`.
-2. `load_song_argv` — windowed Clone Hero + `--song <folder>`. **No `--player`.**
+2. `game_argv` — windowed Clone Hero. **No `--song`. No `--player`.**
 3. Start the process (injectable in tests).
-4. Grab frames (Shell.Screencast). `is_highway` must go true before timeout. If it never does, fail — do not start pressing keys into a menu.
+4. `load_until_highway`: classify the frame, press one action, verify. Fail on `unknown` or a 24-step budget. Do not mash keys into an unrecognized screen.
 5. `play_live` with the **same** readout as Stage 1. ChartEye is the POC eye; `--pixels` swaps in `LivePixelEye`.
 6. Score the recorded log. Stop Clone Hero.
 
-If the highway never appears, the bug is the loader, not the fly. Fix the loader. Do not ydotool through Quickplay.
+If the highway never appears, the bug is the loader, not the fly. Fix `classify` / `keys_for`. Do not sit in the menus as a human.
 
 ## Commands
 

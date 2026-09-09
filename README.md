@@ -21,7 +21,7 @@ Harness process (teach → record → score → live load): [docs/HARNESS.md](do
 
 Otto builds the harness. The **fly readout** plays. Do not sit in Clone Hero menus teaching a human how to clear a song.
 
-`tools/load_song.py` prints the Clone Hero argv that opens a song folder (`--song` only). Clone Hero’s official `--player Guitar,Easy` path is the **chart-preview bot** — that is not the fly (PRD). The readout trains offline on highway pictures (`ChartEye` / pixels), then `play_live.py` writes uinput.
+Clone Hero’s `--song` flag errors without a player, and `--player` is their **chart-preview bot** — that is not the fly (PRD). Live start is windowed Clone Hero; `flyhero.loader` classifies each frame and presses one key until the highway. The readout trains offline on highway pictures (`ChartEye` / pixels), then writes uinput.
 
 `RecordingHands` turns a chart (or pixel frames) into a fret/strum key log. Live `DeviceHands` writes those edges to `/dev/uinput`. CI never opens the kernel device.
 

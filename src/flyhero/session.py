@@ -8,7 +8,8 @@ from pathlib import Path
 from flyhero.chart import Chart, load_chart, pick_track
 from flyhero.detect import wait_for_highway
 from flyhero.guitar import GuitarMap
-from flyhero.launch import load_song_argv, song_folder, start_clonehero, stop_clonehero
+from flyhero.launch import game_argv, start_clonehero, stop_clonehero
+from flyhero.loader import DEFAULT_QUERY, load_until_highway
 from flyhero.live import play_live
 from flyhero.play import record_chart
 from flyhero.score import ScoreReport, score_log
@@ -90,10 +91,11 @@ def run_live(
     eye=None,
     play=True,
 ) -> SessionResult:
-    """Load the song, wait for the highway, play, score. Inject I/O in tests."""
+    """Start the game, walk menus to the highway, play, score. Inject I/O in tests."""
     if grab is None:
         raise ValueError("live session needs a frame grabber")
-    command = argv if argv is not None else load_song_argv(song or ".")
+    _ = song
+    command = argv if argv is not None else game_argv()
     taught = readout
     mapping = getattr(hands, "mapping", None) or getattr(
         getattr(hands, "log", None), "mapping", None
@@ -153,7 +155,10 @@ def run_live_path(
     start=None,
     stopper=None,
     killer=None,
-    waiter=wait_for_highway,
+    waiter=None,
+    press=None,
+    query: str = DEFAULT_QUERY,
+    settle: float = 0.8,
     clock=None,
     sleeper=None,
     eye=None,
@@ -161,7 +166,8 @@ def run_live_path(
     readout: LinearReadout | None = None,
     mapping: GuitarMap | None = None,
 ) -> SessionResult:
-    """Ngram entry: stop leftover game, ``--song`` load, wait, play, score."""
+    """Ngram entry: stop leftover game, walk menus, play, score."""
+    from flyhero.menu import default_menu
     from flyhero.shellcast import snapshot_frame
 
     text = Path(path).read_text(encoding="utf-8")
@@ -171,13 +177,22 @@ def run_live_path(
     if hands is None:
         hands = RecordingHands(guitar)
     (killer or stop_clonehero)()
-    argv = load_song_argv(song_folder(path))
+    tap = press if press is not None else default_menu().tap
+    wait = waiter
+    if wait is None:
+        wait = lambda grabber: load_until_highway(
+            grabber,
+            tap,
+            query=query,
+            settle=settle,
+            sleeper=sleeper,
+        )
+    argv = game_argv()
     result = run_live(
         chart,
         hands,
         start=start or start_clonehero,
         grab=grab or snapshot_frame,
-        song=song_folder(path),
         countdown=countdown,
         look_ahead=look_ahead,
         depth=depth,
@@ -185,7 +200,7 @@ def run_live_path(
         window=window,
         readout=readout,
         argv=argv,
-        waiter=waiter,
+        waiter=wait,
         stopper=stopper if stopper is not None else (lambda proc: None if keep_game else proc.terminate()),
         clock=clock,
         sleeper=sleeper,
