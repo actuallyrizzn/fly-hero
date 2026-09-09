@@ -11,3 +11,9 @@ build/
 Games/
 *.tar
 *.tar.xz
+# Family / community charts stay on the ngram Songs dir, not GitHub
+songs/
+*.ogg
+*.mp3
+*.wav
+*.opus

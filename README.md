@@ -15,6 +15,14 @@ Tasks: [Fly Hero board](https://tasks.decisionsciencecorp.com/admin/projects.php
 - **Controls:** fly graph vs scrambled vs features-only.
 - **Slice gate:** ≥90% unit + integration + that slice’s visual end-to-end routes, then commit and push.
 
+## Phase 2 — fair eye (pixels)
+
+`PixelEye` turns a highway photograph into the same lanes×depth frame as `ChartEye`. Tests paint a mid-tempo fixture and decode it back — that recorded PNG is the visual route. Live Clone Hero on ngram uses `LivePixelEye` + `grab_clonehero()` (Xwayland `xwininfo` + a screen grab). Same player; swap the eye.
+
+```bash
+pytest tests/test_pixel_eye.py
+```
+
 ## Phase 1 — POC eye
 
 `ChartEye` turns a `notes.chart` into the same lane×depth picture a player sees. Near is the strike line. The player does not get hit clocks. `NearBinReadout` is the features-only ceiling (copy the near bin). A later fly readout has to match or beat that.

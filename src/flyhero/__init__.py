@@ -2,6 +2,7 @@
 
 from flyhero.config import COVERAGE_FLOOR, HostConfig
 from flyhero.hands import Hands, NullHands
+from flyhero.pixel_eye import LivePixelEye, PixelEye
 from flyhero.player import Player
 from flyhero.reservoir import NullReservoir, Reservoir
 from flyhero.types import Action, FeatureFrame, Lane
@@ -15,8 +16,10 @@ __all__ = [
     "Hands",
     "HostConfig",
     "Lane",
+    "LivePixelEye",
     "NullHands",
     "NullReservoir",
+    "PixelEye",
     "Player",
     "Reservoir",
     "__version__",
