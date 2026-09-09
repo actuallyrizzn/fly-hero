@@ -143,11 +143,25 @@ def test_load_until_highway_walks_and_stops():
         settle=0.1,
         templates=templates(),
         sleeper=lambda delay: None,
+        confirm=1,
     )
     assert classify(seen, templates=templates()) == "highway"
     assert menu.taps[0] == "enter"
     assert "k" in menu.taps
     assert menu.taps.count("down") == 3
+
+
+def test_stale_highway_before_songs_is_ignored():
+    menu = RecordingMenu()
+    with pytest.raises(LoaderStuck, match="highway not reached"):
+        load_until_highway(
+            paint_receptors,
+            menu.tap,
+            max_steps=3,
+            confirm=1,
+            settle=0.0,
+        )
+    assert menu.taps == []
 
 
 def test_load_until_highway_unknown_and_stuck():

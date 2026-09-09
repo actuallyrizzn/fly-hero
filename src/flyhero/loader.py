@@ -51,6 +51,7 @@ class LoaderState:
     unknown_streak: int = 0
     seen: list[str] = field(default_factory=list)
     passed: set[str] = field(default_factory=set)
+    highway_hits: int = 0
 
 
 def _rgb(image: Image.Image) -> Image.Image:
@@ -255,6 +256,7 @@ def load_until_highway(
     settle: float = 0.0,
     templates: dict[str, Image.Image] | None = None,
     max_mse: float = 2500.0,
+    confirm: int = 2,
     sleeper=None,
     state: LoaderState | None = None,
 ) -> Image.Image:
@@ -272,7 +274,18 @@ def load_until_highway(
         print(f"loader: {screen}", flush=True)
         keys = keys_for(screen, walk, query=query)
         if keys is None:
-            return frame
+            if "songs" not in walk.passed:
+                print("loader: highway ignored (song not picked)", flush=True)
+                if settle:
+                    pause(settle)
+                continue
+            walk.highway_hits += 1
+            if walk.highway_hits >= confirm:
+                return frame
+            if settle:
+                pause(settle)
+            continue
+        walk.highway_hits = 0
         for name in keys:
             press(name)
         if settle:

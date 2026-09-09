@@ -240,6 +240,10 @@ def test_live_path_default_waiter_walks_menus(tmp_path: Path):
     frames = [
         Image.open(SCREENS / "title.png"),
         Image.open(SCREENS / "main.png"),
+        Image.open(SCREENS / "songs.png"),
+        Image.open(SCREENS / "songs.png"),
+        Image.open(SCREENS / "songs.png"),
+        paint_receptors(),
         paint_receptors(),
     ]
     menu = RecordingMenu()
