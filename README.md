@@ -46,7 +46,7 @@ POC / no pixels (chart-as-picture eye): omit `--pixels`.
 
 `PixelEye` turns a highway photograph into the same lanes×depth frame as `ChartEye`. Tests paint a mid-tempo fixture and decode it back — that recorded PNG is the visual route.
 
-Live Clone Hero on ngram uses **GNOME Shell.Screencast** (clean 1920×1080 compositor frames) via `ScreenCastSession` + `grab_clonehero()`, then crops with `xwininfo` geometry. Raw `gst-launch pipewiresrc` on this box negotiates YUY2 and scrambles the picture — do not use that as the fair eye. X11 `ImageGrab` of Unity is black; kmsgrab of Intel CCS tiles is noise. Same player; swap the eye.
+Live fair eye on ngram: **GNOME Shell.Screencast PNG snapshots** at **640×360** (`SNAPSHOT_PIPELINE_FAST` → `snapshot_frame` → `grab_clonehero`). Bench on slim: ~7 unique Hz / ~140ms mean. Full-HD snapshots (~440ms) and rolling webm casts (stale tips) are diagnostic only. Raw `gst-launch pipewiresrc` negotiates YUY2 and scrambles — do not use it as the fair eye. X11 `ImageGrab` of Unity is black; kmsgrab of Intel CCS tiles is noise.
 
 ```bash
 pytest tests/test_pixel_eye.py tests/test_pipewire.py

@@ -2,9 +2,10 @@
 
 CI never needs this. Tests feed recorded frames.
 
-Live play on ngram uses Mutter ScreenCast → PipeWire (clean RGB), then
-crops with xwininfo geometry. X11 ImageGrab of Unity is black — do not
-use it as the fair eye.
+Live fair eye on ngram: GNOME Shell.Screencast PNG snapshots (fast 640×360
+pipeline) cropped with xwininfo geometry. Auto-scales when the stream is
+smaller than the native screen. X11 ImageGrab of Unity is black; raw Mutter
+PipeWire YUY2 scrambles — do not use those as the fair eye.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -74,6 +76,16 @@ def find_clonehero_box(
     return parse_xwininfo(text)
 
 
+def detect_screen_size(*, runner: Callable[..., subprocess.CompletedProcess] | None = None) -> tuple[int, int]:
+    """Native X/Wayland screen pixels (for scaling cropped grabs from downscaled casts)."""
+    run = runner or subprocess.run
+    completed = run(["xdpyinfo"], check=False, capture_output=True, text=True)
+    match = re.search(r"dimensions:\s+(\d+)x(\d+)", completed.stdout or "")
+    if match:
+        return int(match.group(1)), int(match.group(2))
+    return 1920, 1080
+
+
 def crop_to_box(
     image: Image.Image,
     box: WindowBox,
@@ -82,7 +94,13 @@ def crop_to_box(
 ) -> Image.Image:
     """Crop a monitor frame to the Clone Hero window. Scales if stream ≠ screen."""
     width, height = image.size
-    screen_w, screen_h = screen_size or (width, height)
+    if screen_size is None:
+        # Downscaled snapshots (640×360) still report full-res xwininfo coords.
+        if box.left + box.width > width + 8 or box.top + box.height > height + 8:
+            screen_size = detect_screen_size()
+        else:
+            screen_size = (width, height)
+    screen_w, screen_h = screen_size
     if screen_w <= 0 or screen_h <= 0:
         raise ValueError("screen size must be positive")
     scale_x = width / screen_w
@@ -117,16 +135,33 @@ def grab_clonehero(
     frame_grabber: FrameGrabber | None = None,
     box_finder: Callable[..., WindowBox] | None = None,
     screen_size: tuple[int, int] | None = None,
+    find_timeout: float = 2.0,
 ) -> Image.Image:
-    """PipeWire monitor frame, cropped to the Clone Hero window when found."""
+    """Monitor frame cropped to the Clone Hero **window** (not the desktop).
+
+    Windowed live demos leave side margin for a fly-node viz; the reservoir
+    must never see dock / top bar / that margin — only the game client.
+    """
     if display:
         os.environ["DISPLAY"] = display
-    image = require_visible((frame_grabber or grab_desktop_frame)())
+    grabber = frame_grabber or grab_desktop_frame
     finder = box_finder or find_clonehero_box
-    try:
-        box = finder(title=title)
-    except TypeError:
-        box = finder()
-    except FileNotFoundError:
-        return image
-    return crop_to_box(image, box, screen_size=screen_size)
+    deadline = time.monotonic() + max(0.0, find_timeout)
+    image = require_visible(grabber())
+    last_err: Exception | None = None
+    while True:
+        try:
+            try:
+                box = finder(title=title)
+            except TypeError:
+                box = finder()
+            return crop_to_box(image, box, screen_size=screen_size)
+        except FileNotFoundError as exc:
+            last_err = exc
+            if time.monotonic() >= deadline:
+                # Full-desktop fallback poisons is_highway (dock/top-bar whites).
+                # Prefer the last frame only after a real retry window.
+                return image
+            time.sleep(0.12)
+            image = require_visible(grabber())
+    raise last_err or FileNotFoundError("Clone Hero window not found")

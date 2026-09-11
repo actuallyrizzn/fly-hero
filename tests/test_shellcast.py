@@ -26,7 +26,12 @@ def test_extract_frame_reads_png(tmp_path: Path):
 
     def runner(cmd, **kwargs):
         out = Path(cmd[-1])
-        painted.save(out)
+        if out.suffix == ".webm":
+            # remux of the cp snapshot — copy bytes through
+            src = Path(cmd[cmd.index("-i") + 1])
+            out.write_bytes(src.read_bytes())
+        else:
+            painted.save(out)
 
         class Result:
             returncode = 0
@@ -59,14 +64,79 @@ def test_extract_frame_rejects_empty(tmp_path: Path):
 def test_extract_frame_ffmpeg_failure(tmp_path: Path):
     webm = tmp_path / "live.webm"
     webm.write_bytes(b"x" * 80)
+    calls = {"n": 0}
 
     class Result:
-        returncode = 1
-        stderr = "no decoder"
-        stdout = ""
+        def __init__(self, code: int, err: str = "") -> None:
+            self.returncode = code
+            self.stderr = err
+            self.stdout = ""
+
+    def runner(cmd, **kwargs):
+        calls["n"] += 1
+        out = Path(cmd[-1])
+        if out.suffix == ".webm":
+            src = Path(cmd[cmd.index("-i") + 1])
+            out.write_bytes(src.read_bytes())
+            return Result(0)
+        return Result(1, "no decoder")
 
     with pytest.raises(RuntimeError, match="no decoder"):
-        extract_frame(webm, runner=lambda *a, **k: Result())
+        extract_frame(webm, runner=runner)
+    # remux (ok) → sseof(fixed) fail
+    assert calls["n"] == 2
+
+
+def test_extract_frame_always_remuxes_then_sseof(tmp_path: Path):
+    painted = _rgb((20, 80, 160), (32, 24))
+    webm = tmp_path / "live.webm"
+    webm.write_bytes(b"x" * 80)
+    cmds = []
+
+    def runner(cmd, **kwargs):
+        cmds.append(cmd)
+        out = Path(cmd[-1])
+        if out.suffix == ".webm":
+            src = Path(cmd[cmd.index("-i") + 1])
+            out.write_bytes(src.read_bytes())
+        elif out.suffix == ".png":
+            painted.save(out)
+
+        class Result:
+            returncode = 0
+            stderr = ""
+            stdout = ""
+
+        return Result()
+
+    image = extract_frame(webm, runner=runner)
+    assert image.getpixel((0, 0))[2] == 160
+    assert len(cmds) == 2
+    assert any(c[-1].endswith(".webm") for c in cmds)
+    assert "-sseof" in cmds[1]
+
+
+def test_shell_screencast_restart_fresh_file():
+    starts = []
+
+    def starter(dest, framerate=15):
+        path = Path(f"/tmp/r{len(starts)}.webm")
+        starts.append(path)
+        return path
+
+    stops = {"n": 0}
+    session = ShellScreencast(
+        starter=starter,
+        stopper=lambda: stops.__setitem__("n", stops["n"] + 1) or True,
+        extractor=lambda webm: _rgb((1, 2, 3)),
+        sleeper=lambda _: None,
+    )
+    session.start()
+    assert session.webm_bytes() == 0  # path may not exist on disk in stub
+    session.restart()
+    assert len(starts) == 2
+    assert stops["n"] >= 1
+    session.close()
 
 
 def test_shell_screencast_retries_empty_then_grabs():
@@ -84,10 +154,41 @@ def test_shell_screencast_retries_empty_then_grabs():
         stopper=lambda: True,
         extractor=extractor,
         sleeper=slept.append,
+        max_age_s=60.0,
+        max_bytes=10_000_000,
     )
     assert session.grab().getpixel((0, 0)) == (1, 2, 3)
     assert calls["n"] == 3
-    assert slept == [0.25, 0.25]
+    # Failed extracts sleep 0.15 then restart (close+0.12+start).
+    assert slept.count(0.15) >= 2
+    assert slept.count(0.12) >= 2
+    session.close()
+
+
+def test_shell_screencast_rolls_on_age():
+    import time
+
+    starts = []
+
+    def starter(dest, framerate=15):
+        path = Path(f"/tmp/age{len(starts)}.webm")
+        starts.append(path)
+        return path
+
+    session = ShellScreencast(
+        starter=starter,
+        stopper=lambda: True,
+        extractor=lambda webm: _rgb((9, 9, 9)),
+        sleeper=lambda _: None,
+        max_age_s=1.0,
+        max_bytes=10_000_000,
+    )
+    session.start()
+    session._started_at = time.monotonic() - 2.0
+    assert session.needs_roll()
+    assert session.maybe_roll()
+    assert session.rolls == 1
+    assert len(starts) == 2
     session.close()
 
 
@@ -217,6 +318,61 @@ def test_start_screencast_refuses():
         sys.modules.pop("dbus", None)
 
 
+def test_dismiss_remote_desktop_prompt_clicks_share():
+    from flyhero.shellcast import dismiss_remote_desktop_prompt
+
+    calls = []
+
+    def runner(cmd, check=False, capture_output=True, text=True):
+        calls.append(cmd)
+
+        class Result:
+            stdout = ""
+            stderr = ""
+            returncode = 0
+
+        if cmd[:2] == ["xdotool", "search"]:
+            # Dialog present until a geometry Share/toggle click lands.
+            shared = any(
+                len(c) >= 2 and c[0] == "xdotool" and "click" in c and "--sync" in c
+                for c in calls
+            )
+            Result.stdout = "" if shared else "0xabc\n"
+        elif cmd[:2] == ["xdotool", "getwindowgeometry"]:
+            Result.stdout = "WINDOW=0xabc\nX=10\nY=10\nWIDTH=400\nHEIGHT=200\nSCREEN=0\n"
+        return Result()
+
+    assert dismiss_remote_desktop_prompt(runner=runner) is True
+    assert any("mousemove" in c and "--sync" in c for c in calls)
+    assert any("click" in c for c in calls)
+
+
+def test_quiet_banners_restores_prior():
+    from flyhero.shellcast import QuietBanners
+
+    calls = []
+
+    def runner(cmd, check=False, capture_output=True, text=True):
+        calls.append(cmd)
+
+        class Result:
+            stdout = "true\n"
+            stderr = ""
+            returncode = 0
+
+        return Result()
+
+    with QuietBanners(runner=runner):
+        assert ["gsettings", "set", "org.gnome.desktop.notifications", "show-banners", "false"] in calls
+    assert calls[-1] == [
+        "gsettings",
+        "set",
+        "org.gnome.desktop.notifications",
+        "show-banners",
+        "true",
+    ]
+
+
 def test_snapshot_frame_reads_png(tmp_path: Path):
     painted = _rgb((40, 90, 40), (48, 32))
     out = tmp_path / "snap.png"
@@ -225,6 +381,7 @@ def test_snapshot_frame_reads_png(tmp_path: Path):
     class Iface:
         def Screencast(self, dest, options):
             assert "pngenc" in options["pipeline"]
+            assert "640" in options["pipeline"]  # fast default
             return True, str(out)
 
     slept = []

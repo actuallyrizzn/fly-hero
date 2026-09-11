@@ -28,6 +28,12 @@ chart
 
 CI always runs 1–3 on `tests/fixtures/midtempo.chart`. The laptop is a *demo of the repo*, not a second training method.
 
+## Windowed live demo (locked)
+
+Live Clone Hero stays **windowed** (`-screen-fullscreen 0`, typically 1280×720). That leaves desktop margin for a later **fly-node firing** visualization beside the game (same shape as other connectome demos).
+
+The fair eye must see **only the Clone Hero window**: `grab_clonehero()` captures the monitor then **crops** with `find_clonehero_box` / `crop_to_box`. Dock, top bar, and side chrome never feed the reservoir. Do not switch the live demo to fullscreen without an explicit call to drop that side viz lane.
+
 ## Stage 1 — Teach (offline)
 
 1. Parse `notes.chart` for one guitar track (`EasySingle` on Kazotsky; `ExpertSingle` on the fixture).
@@ -53,9 +59,10 @@ A note is a **hit** when, inside `[t − window, t + window]`, the matching fret
 1. `probe()` — Clone Hero binary, `/dev/uinput`, `DISPLAY`.
 2. `game_argv` — windowed Clone Hero. **No `--song`. No `--player`.**
 3. Start the process (injectable in tests).
-4. `load_until_highway`: classify the frame, press one action, verify. Fail on `unknown` or a 24-step budget. Do not mash keys into an unrecognized screen.
-5. `play_live` with the **same** readout as Stage 1. ChartEye is the POC eye; `--pixels` swaps in `LivePixelEye`.
-6. Score the recorded log. Stop Clone Hero.
+4. `load_until_highway`: classify the frame, press one action, verify. Fail on `unknown` or a 24-step budget. Do not mash keys into an unrecognized screen. **Settings ≠ songs** (Back/`S`); **main+Guest ≠ profile** (never Enter on main once Guest is joined).
+5. **Eye:** live play ticks use **fast 640×360 GNOME PNG snapshots** (`SNAPSHOT_PIPELINE_FAST` / `snapshot_frame`) under `QuietBanners` — ~130ms unique frames on ngram, cropped with `grab_clonehero` (auto screen-size scale). Full-HD snapshots (~425ms) and rolling webm casts (stale tips) are diagnostic only (`--fullhd-snapshot`, `--cast-eye`). Do not use raw Mutter PipeWire as the fair eye (YUY2 scramble). Bench: `tools/bench_eye.py`.
+6. `play_live` with the **same** readout as Stage 1. ChartEye is the POC eye; `--pixels` swaps in `LivePixelEye`.
+7. Score the recorded log. Stop Clone Hero.
 
 If the highway never appears, the bug is the loader, not the fly. Fix `classify` / `keys_for`. Do not sit in the menus as a human.
 
@@ -65,9 +72,10 @@ If the highway never appears, the bug is the loader, not the fly. Fix `classify`
 # CI / teach + score (no game)
 python tools/run_session.py --offline tests/fixtures/midtempo.chart --track ExpertSingle
 
-# ngram: prove the song loaded (no keys)
-python tools/run_session.py --load-only --track EasySingle \
-  ~/.clonehero/Songs/Thingerthing/Covers\ &\ vGH\'s/Kazotsky\ Kick\ vGH/notes.chart
+# ngram: prove the song loaded (no play keys). Midtempo search must be "fly"
+# (title-prefix); "midtempo" does not filter. Prefer --reuse-game if CH is up.
+python tools/run_session.py --load-only --reuse-game --query fly --track EasySingle \
+  ~/.clonehero/Songs/Fly\ Hero/Fly\ Hero\ Midtempo/notes.chart
 
 # ngram demo — same player as offline, uinput into Clone Hero
 python tools/run_session.py --live --track EasySingle \
