@@ -2,7 +2,7 @@
 
 **Goal (Mark, 2026-09-11):** a Clone Hero streamer driven by the fly wiring. Fly Hero's hands play the game. A new sibling program talks: it reacts to his own gameplay, to chat, and to replies on social, in the best English we can get out of the connectome + readout setup. If the English is still weird or dumb, that is acceptable. It is not a target and not a blocker. We are not role-playing an insect and not sandbagging the model.
 
-**Status:** plan only. Nothing here is authorized to build until Mark says go. This file lives in `fly-hero/docs/` until the new repo exists, then moves there.
+**Status:** plan only. Nothing here is authorized to build until Mark says go. Canonical: [Tasks Doc #1324](https://tasks.decisionsciencecorp.com/admin/doc.php?id=1324) (Fly Hero → `prd/`). Repo mirror until `fly-cast` exists.
 
 **Author:** Otto Vernal · **Date:** 2026-09-11
 
