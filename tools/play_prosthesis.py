@@ -187,7 +187,32 @@ def _main_locked() -> int:
         action="store_true",
         help="1080p snapshot pipeline instead of fast 640×360",
     )
+    parser.add_argument(
+        "--viz",
+        action="store_true",
+        default=True,
+        help="side-panel DN-VNC node firing viz (default on for --pixels)",
+    )
+    parser.add_argument(
+        "--no-viz",
+        action="store_true",
+        help="disable the side-panel node firing viz",
+    )
+    parser.add_argument(
+        "--when-lag",
+        type=float,
+        default=0.05,
+        help="defer strum this many seconds after gem sighting (default 0.05; fast eye runs early)",
+    )
+    parser.add_argument(
+        "--strum-farness",
+        type=int,
+        default=4,
+        help="arm WHEN when nearest gem farness <= this (default 4; frets already look right)",
+    )
     args = parser.parse_args()
+    if args.no_viz:
+        args.viz = False
 
     text = args.chart.read_text(encoding="utf-8")
     track = pick_track(text, args.track)
@@ -530,6 +555,24 @@ def _play_pixels(args, chart, menu, hands, device) -> int:
     )
     threaded = ThreadedEye(window, depth=args.depth).start()
     prosthesis.reset()
+    viz = None
+    if getattr(args, "viz", False):
+        try:
+            from flyhero.node_viz import NodeFiringViz
+
+            viz = NodeFiringViz(
+                prosthesis.reservoir.size,
+                prosthesis.legs,
+                title="Fly Hero — node firing",
+            )
+            viz.show()
+            print(
+                f"viz: side panel open (legs={prosthesis.legs})",
+                flush=True,
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"viz: unavailable ({exc})", flush=True)
+            viz = None
     hands.release_all()
     warm = time.monotonic() + 0.25
     while time.monotonic() < warm:
@@ -537,10 +580,11 @@ def _play_pixels(args, chart, menu, hands, device) -> int:
     label = (
         "chart-under-pixel-boot"
         if use_chart_actions
-        else ("chart-frets+pixel-WHEN" if chart_frets_pixel_when else "pixel far<=4 single")
+        else ("chart-frets+pixel-WHEN" if chart_frets_pixel_when else "pixel scheduled+lag")
     )
     print(
-        f"playing pixels prosthesis (ThreadedEye, song≈{chart.duration_seconds:.1f}s, {label})",
+        f"playing pixels prosthesis (ThreadedEye, song≈{chart.duration_seconds:.1f}s, {label}, "
+        f"when_lag={args.when_lag:.2f} strum_far<={args.strum_farness})",
         flush=True,
     )
     started = time.monotonic()
@@ -552,6 +596,7 @@ def _play_pixels(args, chart, menu, hands, device) -> int:
     last_eye_frames = -1
     suppress_until = 0.0
     pending_strum_at: float | None = None
+    pending_frets: tuple[bool, ...] | None = None
     sec_per_bin = args.look_ahead / max(args.depth, 1)
     diag = args.out / "near_diag.tsv"
     diag.write_text("t\tmode\tlane\tfar\tstrum\n", encoding="utf-8")
@@ -644,16 +689,50 @@ def _play_pixels(args, chart, menu, hands, device) -> int:
             frets = (
                 tuple(i == lane for i in range(5)) if lane is not None else (False,) * 5
             )
-            strum = bool(
+            # Mark: frets look right, strums a little early. Arm on far<=N, then
+            # defer the strum edge by when_lag; keep frets held from arm time.
+            strum = False
+            lag = float(args.when_lag)
+            far_lim = int(args.strum_farness)
+            if (
                 fresh_eye
                 and lane is not None
                 and best_far is not None
-                and best_far <= 4
+                and best_far <= far_lim
                 and wall >= suppress_until
-            )
+                and pending_strum_at is None
+            ):
+                pending_strum_at = wall + max(0.0, lag)
+                pending_frets = frets
+            if pending_frets is not None:
+                frets = pending_frets
+            if (
+                pending_strum_at is not None
+                and wall >= pending_strum_at
+                and wall >= suppress_until
+            ):
+                strum = True
+                pending_strum_at = None
+                pending_frets = None
             if strum:
-                suppress_until = wall + 0.45
+                suppress_until = wall + 0.50
             action = Action.from_frets(frets, strum)
+        # Reservoir always steps for the side-panel viz; frets/WHEN above win.
+        if use_chart_actions:
+            drive = prosthesis.drive_from_frame(cframe)
+            state = prosthesis.reservoir.state
+        else:
+            drive = prosthesis.drive_from_frame(pix)
+            state = prosthesis.reservoir.step(drive)
+        if viz is not None:
+            viz.update(state, drive=drive)
+            if actions % 5 == 0:
+                viz.pump()
+            if actions % 250 == 1:
+                try:
+                    viz.render().save(args.out / f"viz_{actions:04d}.png")
+                except Exception:
+                    pass
         hands.apply(action)
         actions += 1
         if action.strum:
@@ -677,6 +756,12 @@ def _play_pixels(args, chart, menu, hands, device) -> int:
     final = threaded.latest_image or window.last_image
     if final is not None:
         final.save(args.out / "results.png")
+    if viz is not None:
+        try:
+            viz.render().save(args.out / "viz_final.png")
+        except Exception:
+            pass
+        viz.close()
     rolls = 0
     if cast is not None and getattr(cast, "_shell", None) is not None:
         rolls = int(getattr(cast._shell, "rolls", 0) or 0)

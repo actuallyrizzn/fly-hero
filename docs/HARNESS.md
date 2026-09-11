@@ -61,6 +61,8 @@ A note is a **hit** when, inside `[t − window, t + window]`, the matching fret
 3. Start the process (injectable in tests).
 4. `load_until_highway`: classify the frame, press one action, verify. Fail on `unknown` or a 24-step budget. Do not mash keys into an unrecognized screen. **Settings ≠ songs** (Back/`S`); **main+Guest ≠ profile** (never Enter on main once Guest is joined).
 5. **Eye:** live play ticks use **fast 640×360 GNOME PNG snapshots** (`SNAPSHOT_PIPELINE_FAST` / `snapshot_frame`) under `QuietBanners` — ~130ms unique frames on ngram, cropped with `grab_clonehero` (auto screen-size scale). Full-HD snapshots (~425ms) and rolling webm casts (stale tips) are diagnostic only (`--fullhd-snapshot`, `--cast-eye`). Do not use raw Mutter PipeWire as the fair eye (YUY2 scramble). Bench: `tools/bench_eye.py`.
+
+6. **Side-panel viz:** `play_prosthesis.py --pixels` opens a GTK **node firing** panel to the right of windowed Clone Hero (`flyhero.node_viz`). It paints reservoir activity with the six DN-VNC leg neurons highlighted. Disable with `--no-viz`. Screenshots land in the run dir as `viz_*.png`.
 6. `play_live` with the **same** readout as Stage 1. ChartEye is the POC eye; `--pixels` swaps in `LivePixelEye`.
 7. Score the recorded log. Stop Clone Hero.
 
