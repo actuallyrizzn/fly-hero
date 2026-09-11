@@ -3,8 +3,8 @@
 
 Default ``--oracle`` uses ChartEye for WHEN (chart near-bin → DN-VNC → uinput).
 That isolates the fly→fret half from Screencast/eye lag. Pass ``--pixels`` to
-drive from the live trapezoid eye instead (ThreadedEye + fast 640×360 GNOME
-PNG snapshots under QuietBanners — ~130ms unique frames on ngram).
+drive from the live trapezoid eye instead (ThreadedEye + Mutter BGRx appsink by
+default; ``--snapshot-eye`` for legacy PNG snapshots).
 
 Only one launcher may run at a time (``/tmp/flyhero-play.lock``). Soft-stop
 Clone Hero on boot; never mid-song killalls from this tool.
@@ -46,6 +46,7 @@ from flyhero.guitar import GuitarMap  # noqa: E402
 from flyhero.launch import clonehero_running  # noqa: E402
 from flyhero.menu import focus_clonehero  # noqa: E402
 from flyhero.prosthesis import LegProsthesis, ProsthesisPlayer  # noqa: E402
+from flyhero.events import EventWriter  # noqa: E402
 from flyhero.scorestats import read_scorestats  # noqa: E402
 from flyhero.types import Action  # noqa: E402
 from flyhero.uinput_hands import DeviceHands, UinputMenu, open_uinput  # noqa: E402
@@ -83,6 +84,7 @@ def _wait_score(stamp, *, timeout: float):
 
 
 def _finish(args, device, game, actions, strums, *, mode: str, near_hot: int = 0) -> int:
+    events: EventWriter | None = getattr(args, "_events", None)
     if game is not None:
         print(
             f"GAME {game.notes_hit}/{game.total_notes} ({game.accuracy:.1%}) "
@@ -96,11 +98,22 @@ def _finish(args, device, game, actions, strums, *, mode: str, near_hot: int = 0
             f"near_hot={near_hot}\n",
             encoding="utf-8",
         )
+        if events is not None:
+            events.song_end()
+            events.score(
+                hits=game.notes_hit,
+                notes=game.total_notes,
+                score=game.score,
+                max_streak=game.max_streak,
+                accuracy=game.accuracy,
+            )
     else:
         print(
             f"GAME (no scorestats) ticks={actions} strum_ticks={strums} near_hot={near_hot}",
             flush=True,
         )
+        if events is not None:
+            events.song_end()
     if hasattr(device, "close"):
         device.close()
     return 0 if game is not None and game.notes_hit > 0 else 1
@@ -175,7 +188,12 @@ def _main_locked() -> int:
     parser.add_argument(
         "--snapshot-eye",
         action="store_true",
-        help="explicit fast PNG snapshots (default for --pixels)",
+        help="legacy fast PNG snapshots (fallback; default is BGRx appsink)",
+    )
+    parser.add_argument(
+        "--appsink-eye",
+        action="store_true",
+        help="long-lived Mutter BGRx appsink (default for --pixels)",
     )
     parser.add_argument(
         "--cast-eye",
@@ -199,20 +217,39 @@ def _main_locked() -> int:
         help="disable the side-panel node firing viz",
     )
     parser.add_argument(
-        "--when-lag",
+        "--sec-per-bin",
+        type=float,
+        default=0.0,
+        help="if >0, wait far*sec_per_bin − when_lead + when_lag; if 0 use fixed when_lag only",
+    )
+    parser.add_argument(
+        "--when-lead",
         type=float,
         default=0.05,
-        help="defer strum this many seconds after gem sighting (default 0.05; fast eye runs early)",
+        help="subtract from far*sec_per_bin when --sec-per-bin > 0",
+    )
+    parser.add_argument(
+        "--when-lag",
+        type=float,
+        default=0.06,
+        help="fixed defer after arm (default 0.06 — appsink pixels-75 36/39; PNG ok near 0.08)",
     )
     parser.add_argument(
         "--strum-farness",
         type=int,
         default=4,
-        help="arm WHEN when nearest gem farness <= this (default 4; frets already look right)",
+        help="arm WHEN when nearest gem farness <= this (default 4)",
+    )
+    parser.add_argument(
+        "--events",
+        type=Path,
+        default=None,
+        help="append JSONL gameplay events for Fly Cast (song/fret/strum/score)",
     )
     args = parser.parse_args()
     if args.no_viz:
         args.viz = False
+    args._events = EventWriter(args.events)
 
     text = args.chart.read_text(encoding="utf-8")
     track = pick_track(text, args.track)
@@ -253,12 +290,25 @@ def _main_locked() -> int:
         # what stuck on songs / lied about highway (Remote Desktop + empty keys).
         focus_clonehero()
         if args.pixels:
-            # Stop on Ready — start the song only after the snapshot eye is up
-            # (session.py: starting before cast finishes Midtempo with 0 hits).
+            # Raise the appsink eye BEFORE Ready so Mutter ScreenCast / Remote
+            # Desktop focus loss does not eject us from the Ready screen.
+            from flyhero.pipewire import ScreenCastSession
+            from flyhero.shellcast import QuietBanners, clear_remote_desktop, stop_screencast
+
+            stop_screencast()
+            early_banners = QuietBanners()
+            early_banners.__enter__()
+            early_cast = ScreenCastSession(backend="appsink")
+            early_cast.start()
+            clear_remote_desktop(tries=8)
+            time.sleep(0.5)
+            clear_remote_desktop(tries=4, share_only=True)
+            focus_clonehero()
+            args._early_appsink = (early_banners, early_cast)
             load_midtempo_blind(
                 menu.tap, time.sleep, query=args.query, pause=0.9, start_song=False
             )
-            print("boot: Midtempo Easy Ready (eye starts song)", flush=True)
+            print("boot: Midtempo Easy Ready (eye already live)", flush=True)
         else:
             load_midtempo_blind(
                 menu.tap, time.sleep, query=args.query, pause=0.9, start_song=True
@@ -292,6 +342,7 @@ def _main_locked() -> int:
         f"offset={args.chart_offset}s, song={chart.duration_seconds:.1f}s)",
         flush=True,
     )
+    args._events.song_start(song=str(args.chart), track=args.track)
     started = time.monotonic()
     end = args.countdown + chart.duration_seconds + 1.5
     actions = 0
@@ -313,6 +364,7 @@ def _main_locked() -> int:
             if any(float(frame.cells[i][0]) >= args.near_threshold for i in range(5)):
                 near_hot += 1
             action = player.tick(chart_t)
+            args._events.action_edges(tuple(action.frets), bool(action.strum))
             if action.strum:
                 strums += 1
         actions += 1
@@ -395,16 +447,22 @@ def _play_pixels(args, chart, menu, hands, device) -> int:
     cast: ScreenCastSession | None = None
     from flyhero.shellcast import SNAPSHOT_PIPELINE, SNAPSHOT_PIPELINE_FAST
 
-    if getattr(args, "cast_eye", False):
+    use_snapshot = bool(
+        getattr(args, "snapshot_eye", False) or getattr(args, "fullhd_snapshot", False)
+    )
+    use_cast = bool(getattr(args, "cast_eye", False))
+    early = getattr(args, "_early_appsink", None)
+
+    if use_cast:
         print("pixels: rolling Shell.Screencast eye (WindowCastEye)", flush=True)
-        cast = ScreenCastSession()
+        cast = ScreenCastSession(backend="shell")
         cast.start()
         clear_remote_desktop(tries=6)
         window = WindowCastEye(cast, depth=args.depth, scale=0.45)
-    else:
+    elif use_snapshot:
         pipe = SNAPSHOT_PIPELINE if getattr(args, "fullhd_snapshot", False) else SNAPSHOT_PIPELINE_FAST
         label = "fullhd" if pipe is SNAPSHOT_PIPELINE else "fast640"
-        print(f"pixels: {label} PNG snapshot eye (QuietBanners)", flush=True)
+        print(f"pixels: {label} PNG snapshot eye (QuietBanners fallback)", flush=True)
 
         class FastSnapshotEye(SnapshotEye):
             def __init__(self, **kw):
@@ -437,6 +495,32 @@ def _play_pixels(args, chart, menu, hands, device) -> int:
                 return image
 
         window = FastSnapshotEye(depth=args.depth, wait=0.0, scale=1.0)
+    elif early is not None:
+        early_banners, early_cast = early
+        # Replace the temporary banners context with the early one.
+        try:
+            banners.__exit__(None, None, None)
+        except Exception:
+            pass
+        banners = early_banners
+        cast = early_cast
+        print("pixels: reusing early Mutter BGRx appsink eye", flush=True)
+        clear_remote_desktop(tries=4, share_only=True)
+        focus_clonehero()
+        # scale 0.5 BOX: full-HD decode is ~226ms (~4 Hz) and starves WHEN;
+        # half-res keeps gems and lands ~50ms decode (appsink grab still ~30 Hz).
+        window = WindowCastEye(cast, depth=args.depth, scale=0.5)
+        args._early_appsink = None
+    else:
+        print("pixels: Mutter BGRx appsink eye (WindowCastEye)", flush=True)
+        cast = ScreenCastSession(backend="appsink")
+        cast.start()
+        # Mutter ScreenCast can pop Remote Desktop / steal focus off Ready.
+        clear_remote_desktop(tries=8)
+        time.sleep(0.6)
+        clear_remote_desktop(tries=4, share_only=True)
+        focus_clonehero()
+        window = WindowCastEye(cast, depth=args.depth, scale=0.5)
 
     def _cleanup_eye() -> None:
         if cast is not None:
@@ -469,6 +553,21 @@ def _play_pixels(args, chart, menu, hands, device) -> int:
     frame = _grab()
     label = classify(frame)
     print(f"pixels: post-cast screen={label}", flush=True)
+
+    # Appsink start often dumps us back to the song list. Re-walk blind to Ready.
+    if label in {"songs", "songs_search", "songs_pick", "main", "title", "profile"}:
+        from flyhero.session import load_midtempo_blind
+
+        print("pixels: re-blind Midtempo Ready after cast focus loss", flush=True)
+        focus_clonehero()
+        hands.release_all()
+        load_midtempo_blind(
+            menu.tap, time.sleep, query=args.query, pause=0.9, start_song=False
+        )
+        clear_remote_desktop(tries=4, share_only=True)
+        focus_clonehero()
+        frame = _grab()
+        print(f"pixels: after re-blind screen={classify(frame)}", flush=True)
 
     # Boot left us on Ready (start_song=False). Always press start — Ready's
     # highway preview classifies as highway and would skip the song.
@@ -540,6 +639,7 @@ def _play_pixels(args, chart, menu, hands, device) -> int:
         return 1
     print("pixels: highway confirmed — starting prosthesis", flush=True)
     frame.save(args.out / "highway_start.png")
+    args._events.song_start(song=str(args.chart), track=args.track)
 
     before = read_scorestats()
     stamp = before.timestamp if before else None
@@ -584,7 +684,8 @@ def _play_pixels(args, chart, menu, hands, device) -> int:
     )
     print(
         f"playing pixels prosthesis (ThreadedEye, song≈{chart.duration_seconds:.1f}s, {label}, "
-        f"when_lag={args.when_lag:.2f} strum_far<={args.strum_farness})",
+        f"sec_per_bin={args.sec_per_bin:.3f} when_lead={args.when_lead:.3f} "
+        f"when_lag={args.when_lag:.3f} strum_far<={args.strum_farness})",
         flush=True,
     )
     started = time.monotonic()
@@ -597,9 +698,13 @@ def _play_pixels(args, chart, menu, hands, device) -> int:
     suppress_until = 0.0
     pending_strum_at: float | None = None
     pending_frets: tuple[bool, ...] | None = None
+    pending_arm_far = -1
     sec_per_bin = args.look_ahead / max(args.depth, 1)
     diag = args.out / "near_diag.tsv"
     diag.write_text("t\tmode\tlane\tfar\tstrum\n", encoding="utf-8")
+    (args.out / "strum_diag.tsv").write_text(
+        "t\tlane_now\tfar_now\tfar_arm\tfrets\n", encoding="utf-8"
+    )
     while time.monotonic() - started < end:
         if not _ch_alive():
             print("ABORT: clonehero process gone mid-play", flush=True)
@@ -689,33 +794,61 @@ def _play_pixels(args, chart, menu, hands, device) -> int:
             frets = (
                 tuple(i == lane for i in range(5)) if lane is not None else (False,) * 5
             )
-            # Mark: frets look right, strums a little early. Arm on far<=N, then
-            # defer the strum edge by when_lag; keep frets held from arm time.
+            # Queue (chord, t_hit). Hold armed frets until the strum.
+            # PNG eye (~7 Hz) first-saw gems already near → fixed when_lag worked
+            # (pixels-58). Appsink (~30 Hz) sees gems early → need far×sec_per_bin
+            # with coast (pull eta earlier on closer re-sight) or strike-only.
             strum = False
-            lag = float(args.when_lag)
             far_lim = int(args.strum_farness)
+            spb = float(args.sec_per_bin)
+            lead = float(args.when_lead)
+            extra = float(args.when_lag)
+
+            def _eta(far: int) -> float:
+                if spb > 0:
+                    delay = max(0.0, far * spb - lead) + max(0.0, extra)
+                    return wall + delay
+                # Fixed-lag mode. when_lead pulls fire earlier (appsink was
+                # ~300ms late vs chart on Midtempo — frets from the *next* gem).
+                delay = max(0.0, extra) - max(0.0, lead)
+                return wall + delay
+
             if (
                 fresh_eye
                 and lane is not None
                 and best_far is not None
                 and best_far <= far_lim
                 and wall >= suppress_until
-                and pending_strum_at is None
+                and any(frets)
             ):
-                pending_strum_at = wall + max(0.0, lag)
-                pending_frets = frets
-            if pending_frets is not None:
+                eta = _eta(int(best_far))
+                if pending_strum_at is None or eta < pending_strum_at:
+                    pending_strum_at = eta
+                    pending_frets = frets
+                    pending_arm_far = int(best_far)
+            # Hold armed frets while waiting to strum.
+            if pending_strum_at is not None and pending_frets is not None:
                 frets = pending_frets
             if (
                 pending_strum_at is not None
                 and wall >= pending_strum_at
                 and wall >= suppress_until
             ):
-                strum = True
+                if pending_frets is not None and any(pending_frets):
+                    frets = pending_frets
+                    strum = True
+                    with (args.out / "strum_diag.tsv").open("a", encoding="utf-8") as sf:
+                        sf.write(
+                            f"{t_now:.3f}\t{best_lane if best_lane is not None else -1}\t"
+                            f"{best_far if best_far is not None else -1}\t"
+                            f"{pending_arm_far}\t{''.join('1' if f else '0' for f in frets)}\n"
+                        )
                 pending_strum_at = None
                 pending_frets = None
+                pending_arm_far = -1
             if strum:
-                suppress_until = wall + 0.50
+                # Midtempo Easy spacing is ~1s; keep short so we don't eat the next.
+                suppress_until = wall + 0.28
             action = Action.from_frets(frets, strum)
         # Reservoir always steps for the side-panel viz; frets/WHEN above win.
         if use_chart_actions:
@@ -734,6 +867,7 @@ def _play_pixels(args, chart, menu, hands, device) -> int:
                 except Exception:
                     pass
         hands.apply(action)
+        args._events.action_edges(tuple(action.frets), bool(action.strum))
         actions += 1
         if action.strum:
             strums += 1
